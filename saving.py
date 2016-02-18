@@ -3,8 +3,10 @@ class loader:
 	def __init__(self,quiet=False):
 		self.quiet = quiet
 
-	def generatefilename(self):
-		return "testing.txt"
+	def generatefilename(self,ending=".txt"):
+		from datetime import datetime
+		filename = datetime.now().strftime("%Y%m%d-%H%M%S") + ending
+		return filename
 
 	def savedata(self,data,filename=None,path="./"):
 		from time import time
