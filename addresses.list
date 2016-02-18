@@ -1,0 +1,10 @@
+Hameg HMP4030	/dev/ttyUSB0
+Tektronix TDS1001B	/dev/usbtmc0
+QL335p	/dev/ttyUSB1
+THORLABS PM100USB	/dev/usbtmc0
+TTi TG5011	/dev/ttyACM0
+Generic USBtmc	/dev/usbtmc0
+Agilent DSO1052B	/dev/usbtmc0
+Generic ttyACM	/dev/ttyACM1
+TTI QL335P	/dev/ttyUSB0
+TTI TG5011	/dev/ttyACM0

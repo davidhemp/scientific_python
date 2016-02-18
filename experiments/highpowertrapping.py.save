@@ -1,0 +1,37 @@
+from time import sleep
+import tti
+import hameg
+
+psupply = hameg.HMP4030() #Connect to power supply
+psupply.ask("*IDN)
+
+siggen = tti.TG5011('/dev/ttyACM0')  #conect to TTI TG5011 50MHz function generator over u
+siggen.ask('*IDN?')
+
+#default settings.
+def default():
+	amp = 0.25	#Signal Generator
+	freq = 40.37*10**3
+	siggen.write('WAVE SINE')
+	siggen.write('AMPL %f' %amp)
+	siggen.write('FREQ %f' %freq)
+	
+	psupply.write('*RST') #Laser power supply
+	sleep(0.5)
+	psupply.write('INST:SEL:OUTPUT1')
+	psupply.write('APPlY 12.0,9.5')
+	psupply.ask('APPLY?')
+	sleep(1)
+default()
+
+#Below is the main program.
+psupply.write('OUTPUT:STATE ON')
+siggen.write('OUTPUT ON')
+sleep(5)
+siggen.write('OUPUT OFF')
+psupply('OUTPUT:STATE OFF')
+sleep(1)
+
+#restore defaults and release siggen back to local use
+default()
+siggen.release()

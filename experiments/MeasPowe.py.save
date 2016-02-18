@@ -1,0 +1,49 @@
+import thorlabs
+import hameg
+from time import sleep
+print "Import Complete"
+
+
+#init and clear any old data
+pmeter = thorlabs.PM100USB()
+supply = hameg.HMP4030('/dev/ttyUSB1')
+
+pmeter.ask('*IDN?')
+pmeter.write('*RST')
+pmeter.ask('*TST?')
+
+supply.ask('*IDN?')
+supply.write('*RST')
+
+sleep(1)
+
+#calibration
+
+wave = 1000
+voltage = 12.0
+current = 0.1
+
+pmeter.write('SENS:CORR:WAV %f' %wave)
+rwave = device.ask('SENS:CORR:WAV?')
+
+pmeter.write('SENS:POW:RANG:AUTO 1')
+pmeter.ask('SENS:POW:RANG:AUTO?')
+
+supply.write('INST:SEL:OUTPUT1')
+supply.write('APPLY %f,%f' %(voltage,current))
+supply.ask('APPLY?')
+
+#being measurements
+
+supply.write('OUTPUT:STATE ON')
+pmeter.write('INIT')
+pmeter.write('CONF:POW')
+pmeter.write('MEAS:POW')
+pmeter.ask('FETCH?')
+
+n= 100
+while n > 1:
+	pmeter.ask('READ?')
+	n-=1
+
+supply.write('OUTPUT:STATE: OFF')

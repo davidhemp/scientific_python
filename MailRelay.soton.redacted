@@ -1,0 +1,152 @@
+#!/usr/bin/python2
+
+import imaplib, smtplib, sys, getopt, string, StringIO, rfc822, re
+
+###
+
+sServerImap = "imap.exchange.soton.ac.uk"
+sServerSmtp = ""
+sUserSmtp = ""
+sPasswordSmtp = ""
+nPortSmtp = 2525
+
+###
+
+sUserImap = ""
+sPasswordImap = ""
+sDest = ""
+
+###
+
+def usage():
+	print "Usage: %s -u <user name> -p <password file> -d <destination>" % sys.argv[0]
+
+def emailErrorMsg(sDest):
+	sMsg = '''\
+From: MailRelay@servername
+To: %s
+Subject: Problem with MailRelay
+
+MailRelay is having trouble.  No emails will be relayed until you fix this.''' % sDest
+
+	Smtp = smtplib.SMTP(sServerSmtp, nPortSmtp)
+	Smtp.ehlo()
+	Smtp.debuglevel = 1 
+	Smtp.login(sUserSmtp, sPasswordSmtp)
+	Smtp.sendmail(sDest, sDest, sMsg)
+	Smtp.quit()
+
+
+def main(argv):
+	bUserName = False
+	bPwdFile = False
+	bDest = False
+
+	bKeep = False
+	bWarn = False
+
+	try:
+		opts, args = getopt.getopt(argv, "u:p:d:wk", ["user=", "pwdfile=", "dest=", "warn", "keep"])
+	except getopt.GetoptError:
+		usage()
+		if bWarn: emailErrorMsg(sDest)
+		sys.exit(2)
+
+	for opt, arg in opts:
+		if opt in ("-u", "--user="):
+			sUserImap = arg
+			bUserName = True
+		if opt in ("-p", "--pwdfile="):
+			sPwdFile = arg
+			bPwdFile = True
+		if opt in ("-d", "--dest="):
+			sDest = arg
+			bDest = True
+		if opt in ("-w", "--warn"):
+			bWarn = True
+		if opt in ("-k", "--keep"):
+			bKeep = True
+
+	if not (bUserName and bPwdFile and bDest):
+		usage()
+		if bWarn: emailErrorMsg(sDest)
+		sys.exit(2)
+
+#	if re.compile("(?:[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*|\"(?:[\x01-\x08\x0b\x0c\x0e-\x1f\x21\x23-\x5b\x5d-\x7f]|\\[\x01-\x09\x0b\x0c\x0e-\x7f])*\")@(?:(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?|\[(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?|[a-z0-9-]*[a-z0-9]:(?:[\x01-\x08\x0b\x0c\x0e-\x1f\x21-\x5a\x53-\x7f]|\\[\x01-\x09\x0b\x0c\x0e-\x7f])+)\])").search(sDest) == None:
+#		print "Error: Invalid destination e-mail address supplied."
+#		if bWarn: emailErrorMsg(sDest)
+#		sys.exit(2)
+
+	if re.compile("^[a-zA-Z0-9]+$").search(sUserImap) == None:
+		print "Error: Invalid username supplied."
+		if bWarn: emailErrorMsg(sDest)
+		sys.exit(2)
+
+	try:
+		fPwdFile = open(sPwdFile, 'r')
+		sPasswordImap = fPwdFile.read()
+		sPasswordImap = sPasswordImap.rstrip()
+		fPwdFile.close()
+
+#		if re.compile("^[a-zA-Z0-9]+$").search(sPasswordImap) == None:
+#			print "Error: Invalid password."
+#			if bWarn: emailErrorMsg(sDest)
+#			sys.exit(2)
+	except:
+		print "Error: Password file does not exist."
+		if bWarn: emailErrorMsg(sDest)
+		sys.exit(2)
+
+	Imap = imaplib.IMAP4_SSL(sServerImap)
+	try:
+		Imap.login(sUserImap, sPasswordImap)
+	except:
+		print 'Error: Unable to login to IMAP.'
+		if bWarn: emailErrorMsg(sDest)
+		sys.exit(2)
+
+	Imap.select()
+
+	#Resp, Mails = Imap.search(None, "ALL")
+	Resp, Mails = Imap.search(None, "UNFLAGGED") # checks for emails which have not yet been flagged (aka starred in most GUIs)
+	Mails = string.split(Mails[0])
+
+	if not (Mails == []):
+	    Smtp = smtplib.SMTP(sServerSmtp, nPortSmtp)
+	    Smtp.ehlo()
+            Smtp.debuglevel = 1 
+	    Smtp.login(sUserSmtp, sPasswordSmtp)
+
+	for MailID in Mails:
+	    sResp, Data = Imap.fetch(MailID, "(RFC822)")
+
+	    Text = Data[0][1]
+	    File = StringIO.StringIO(Text)
+	    Message = rfc822.Message(File)
+
+	    sFrom = sDest
+	    sMsg = ""
+	    for sKey, sVal in Message.items():
+		if (sKey == "from"):
+		    sFrom = sVal
+	    	sMsg += "%s: %s\r\n" % (sKey, sVal)
+	    sMsg += "\r\n" + Message.fp.read() + "\r\n\r\n"
+
+            try:
+	    	Smtp.sendmail(sFrom, sDest, sMsg)
+	        if not bKeep:
+			Imap.store(MailID, "+FLAGS", "\\Deleted") # either deletes...
+		else:
+			Imap.store(MailID, "+FLAGS", "\\Flagged") # ...or flags the emails it forwards; either way, this ensures emails are not sent more than once.
+            except smtplib.SMTPSenderRefused:
+                print 'Unable to process email: ' + MailID
+
+
+	Imap.expunge()
+	Imap.logout()
+
+	if not (Mails == []):
+	    Smtp.quit()
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
