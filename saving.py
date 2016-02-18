@@ -1,5 +1,30 @@
 #For loading and saving data
 class loader:
+	def __init__(self,quiet=False):
+		self.quiet = quiet
+
+	def generatefilename(self):
+		return "testing.txt"
+
+	def savedata(self,data,filename=None,path="./"):
+		from time import time
+		from numpy import shape
+		starttime = time()
+		if filename == None:
+			filename = self.generatefilename()
+		savename = path + filename
+		if not self.quiet:
+			print "Saving data at %s" %savename
+		with open(savename,'w') as fw:
+			if not self.quiet:
+				fw.write(\
+					raw_input("Please write any comments you have:") + "\n")
+			for i in range(len(data[0])):
+				line = ""
+				for j in range(len(shape(data))):
+					line += "%s," %data[j][i]
+				fw.write(line[:-1] + "\n")
+
 	def loaddata(self,filename,col=2):
 		def isfloat(linedata):
 			floatable = True
@@ -11,7 +36,8 @@ class loader:
 			return floatable
 
 		def loadascii(filename):
-			print "Loading data from %s as ascii" %filename
+			if not self.quiet:
+				print "Loading data from %s as ascii" %filename
 			starttime = time()
 
 			#Count the number of lines in the file to be loaded.
@@ -38,12 +64,14 @@ class loader:
 						i+=1
 			data = data[:,:i]#wc will often over overestimate the of lines
 			endtime = time()
-			print "That took %i seconds" %int(endtime - starttime)
+			if not self.quiet:
+				print "That took %i seconds" %int(endtime - starttime)
 			return data
 
 		def loadRaw(filename):
 			startime = time()
-			print "Loading data from %s as raw" %filename
+			if not self.quiet:
+				print "Loading data from %s as raw" %filename
 			f = open(filename,'rb')
 			raw = f.read()
 			if filename.endswith(".trc") or filename.endswith(".raw"):
@@ -53,7 +81,8 @@ class loader:
 				from Tektronix import InterpretWaveform
 				x,y = InterpretWaveform(raw)
 			endtime = time()
-			print "That took %i seconds" %int(endtime - startime)
+			if not self.quiet:
+				print "That took %i seconds" %int(endtime - startime)
 			return x,y
 
 		from time import time
