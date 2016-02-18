@@ -41,20 +41,24 @@ class loader:
 			print "That took %i seconds" %int(endtime - starttime)
 			return data
 
-		def loadLeCroyRaw(filename):
+		def loadRaw(filename):
 			startime = time()
-			import JLeCroy
 			print "Loading data from %s as raw" %filename
 			f = open(filename,'rb')
 			raw = f.read()
-			wave,t,x,Int = JLeCroy.InterpretWaveform(raw)
+			if filename.endswith(".trc") or filename.endswith(".raw"):
+				from JLeCroy import InterpretWaveform
+				wave,x,y,Int = InterpretWaveform(raw)
+			if filename.endswith(".isf"):
+				from Tektronix import InterpretWaveform
+				x,y = InterpretWaveform(raw)
 			endtime = time()
 			print "That took %i seconds" %int(endtime - startime)
-			return t,x
+			return x,y
 
 		from time import time
-		if filename.endswith('.trc') or filename.endswith('.raw'):
-			data = loadLeCroyRaw(filename)
+		if any(i in filename for i in [".trc",".raw",".isf"]):
+			data = loadRaw(filename)
 		else:
 			data = loadascii(filename)
 		return data
