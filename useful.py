@@ -5,29 +5,11 @@ def SelectAddress(name, mask, lastknown='/media/matterwave/David/python scripts/
         Example: SelectAddress("Thorlabs Power Meter", "/dev/ttyUSB*")
 
         If no addresses match the mask, then an error is returned. If the named instrument has a previously known address (stored in addresses.list), then set that as default. The last known address is updated once the user selects an address."""
-        
+
         # Create a list of available choices from the given mask
         from glob import glob
         choices = glob(mask)[::-1]
-        if len(choices) == 0:
-                raise Exception('No valid addresses found for [%s] using mask [%s]' % (name, mask))
 
-        # Find the last know address for this named device
-        lines = [line.strip() for line in open(lastknown).readlines()]
-        addresses = dict()
-        for line in lines:
-                (n,v) = line.split('\t')
-                addresses[n] = v
-
-        # If this named device is known, then check whether the last known address is still a valid choice; if it is, move it to the top of the list
-        try:
-		choices.remove(addresses[name])
-		choices.insert(0, addresses[name])
-        except KeyError:
-                print "Named instrument [%s] has no last known address" % name
-        except ValueError:
-                print "Named instrument [%s]: last known address [%s] is no longer valid" % (name, addresses[name])
-        
         # Use a curses-based menu system to allow the user to select a device
         # Lifted from urwid "Simple Menu" example and hacked in a very un-pythonic way to return a value
         # http://excess.org/urwid/docs/tutorial/
@@ -56,16 +38,6 @@ def SelectAddress(name, mask, lastknown='/media/matterwave/David/python scripts/
 
         tmp = urwid.MainLoop(top, palette=[('reversed', 'standout', '')]).run()
 	choice = choiceObj.value
-
-        # Save this as the last known address
-        addresses[name] = choice
-	try:
-		h = open(lastknown, 'w')
-		for key, value in addresses.iteritems():
-			h.write('%s\t%s\n' % (key, value))
-		h.close()
-	except:
-		raise Warning("Unable to update last known address!")
 
         return choice
 
