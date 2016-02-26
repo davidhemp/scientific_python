@@ -27,6 +27,15 @@ class loader:
 					line += "%s," %data[j][i]
 				fw.write(line[:-1] + "\n")
 
+	def simpleload(self,filename):
+		data = []
+		with open(filename) as f:
+			for line in f:
+				loadline = line.strip().split(',')
+				if len(loadline) >= 2:
+					data.append(loadline)
+		return data
+
 	def loaddata(self,filename,col=2):
 		def isfloat(linedata):
 			floatable = True

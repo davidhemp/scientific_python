@@ -11,11 +11,14 @@ class HDO6104:
                 self.read_raw = self.connection.read_raw
 
         def raw(self, channel=1):
-                self.waitOPC()
                 self.write('COMM_FORMAT DEF9,WORD,BIN')
+				self.write('STOP')
+				self.write('ARM')
+				self.write("FRTR")
+				self.waitOPC()
                 self.write('C%u:WAVEFORM?' % channel)
                 return self.read_raw()
-        
+
         def data(self, channel=1):
                 raw = self.raw(channel) # Grab waveform from scope
                 return InterpretWaveform(raw)
@@ -25,7 +28,7 @@ class HDO6104:
                 self.write('WAIT')
                 while not self.opc():
                         sleep(1)
-                
+
         def opc(self):
                 return self.ask('*OPC?')[-1] == '1'
 
@@ -40,7 +43,7 @@ def InterpretWaveform(raw, integersOnly=False, headersOnly=False):
 		wave = raw
 
         del raw
-        
+
         if wave[0] != '#':
                 raise Exception('Waveform format not as expected')
         n = int(wave[1])          # number of digits in length of data
@@ -124,7 +127,6 @@ def InterpretWaveform(raw, integersOnly=False, headersOnly=False):
                 if integersOnly:
                         return (WAVEDESC, integers)
                 else:
-                        y = integers * WAVEDESC['VERTICAL_GAIN'] - WAVEDESC['VERTICAL_OFFSET'] 
+                        y = integers * WAVEDESC['VERTICAL_GAIN'] - WAVEDESC['VERTICAL_OFFSET']
                         x = arange(len(integers)) * WAVEDESC['HORIZ_INTERVAL'] + WAVEDESC['HORIZ_OFFSET']
                         return (WAVEDESC, x, y, integers)
-

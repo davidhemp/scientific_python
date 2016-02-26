@@ -49,8 +49,7 @@ class IPG1550:
         self.read()
 
     def setlaserpower(self,laserpower):
-        if laserpower in (int, float):
-            return self.ask("SPS %s" laserpower)
+        return self.ask("SPS %s" %laserpower)
 
     def readlaserpower(self):
         return self.ask("ROP")
