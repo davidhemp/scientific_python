@@ -1,8 +1,4 @@
 #!/usr/bin/python
-import pylab as pl
-from numpy import array, log10, arange, abs, zeros
-import matplotlib.pyplot as plt
-from time import time
 
 class plotter:
 	def __init__(self,quiet=False):
@@ -10,12 +6,45 @@ class plotter:
 		self.quiet = quiet
 		self.loader = saving.loader(quiet=self.quiet)
 
+	def func(x,alpha,f0,damp,noise):
+		return alpha*damp/((f0**2-x**2)**2+((x*damp)**2))+noise
+
 	def checkdata(self,filename=None,x=None,y=None):
 		if  (x == None or y == None) and filename != None:
 			x,y = self.loader.loaddata(filename)
 		elif (x == None or y == None) and filename == None:
 			raise IOError("Missing data or filename")
 		return x,y
+
+	def PSDplot(self,filename=None,x=None,y=None):
+		from time import time
+		from pylab import psd,show
+		from numpy.random import randint
+		x,y = self.checkdata(filename,x,y)
+		if not self.quiet:
+			print "Generating PSD"
+			starttime = time()
+		dt = x[-1] - x[0]
+		df = 1./dt
+		PData = psd(y,NFFT=2**20,Fs=df)
+		show(randint(100))
+		if not self.quiet:
+				print "PSD generated in %i seconds" %(time()-starttime)
+		return
+
+	def PSDdata(self,filename=None,x=None,y=None):
+		from time import time
+		from scipy.signal import welch
+		x,y = self.checkdata(filename,x,y)
+		if not self.quiet:
+			print "Generating PSD data"
+			starttime = time()
+		dt = x[1] - x[0]
+		df = 1/dt
+		f, Pxx_den = welch(y, fs=df, nperseg=len(y)/2)
+		if not self.quiet:
+				print "PSD data generated in %i seconds" %(time()-starttime)
+		return f, abs(Pxx_den)
 
 class empty:
 	def fftplot(filename,x=None,y=None,average=50,maxx=300,windows=False):
@@ -33,7 +62,7 @@ class empty:
 		A = A[:N/2]
 		A = abs(A)
 		endtime = time()
-		print "fft data generating in %i seconds" %(endtime-starttime)
+
 		savedata = str(filename[:-4]) + '.fft'
 		fw = open(savedata,'a')
 		for i in arange(0,len(A)):
@@ -58,8 +87,7 @@ class empty:
 				raise E
 		return f,A
 
-	def func(x,alpha,f0,damp,noise):
-		return alpha*damp/((f0**2-x**2)**2+((x*damp)**2))+noise
+
 
 
 	def fftfit(filename,f=None,A=None):

@@ -2,31 +2,39 @@ class TG5011:
 	def __init__(self,address='/dev/ttyACM*'):
 		import usbconnect
 		if not address.endswith('*'):
-			self.connection = usbconnect.ttyACM(address)
+			self.siggen = usbconnect.ttyACM(address)
 		else:
-			self.connection = usbconnect.ttyACM()
+			self.siggen = usbconnect.ttyACM()
 
 	def write(self,cmd):
-		self.connection.write(cmd.upper())
+		self.siggen.write(cmd.upper())
 	def read(self):
-		self.connection.read()
+		self.siggen.read()
 	def ask(self,cmd):
-		if not cmd.endswith('?'):cmd+='?'
-		self.connection.ask(cmd.upper())
+		if not cmd.endswith('?'):
+			cmd+='?'
+		self.siggen.ask(cmd.upper())
 	def query(self,cmd):
-		if not cmd.endswith('?'):cmd+='?'
-		return self.connection.query(cmd.upper())
+		if not cmd.endswith('?'):
+			cmd+='?'
+		return self.siggen.query(cmd.upper())
 	def release(self):
-		self.connection.release()
-	def setup(self,amp=0.1,freq=9.45*10**6,wave='SINE'):		
-		siggen = self.connection		
+		self.siggen.release()
+	def setup(self,amp=0.1,freq=9.45*10**6,wave='SINE'):
 		if wave.upper() == 'SIN':
 			wave = 'SINE'
-		
-		siggen.write('WAVE %s' %wave)
-		siggen.write('AMPL %f' %amp)
-		siggen.write('FREQ %f' %freq)
 
+		self.siggen.write('WAVE %s' %wave)
+		self.siggen.write('AMPL %f' %amp)
+		self.siggen.write('FREQ %f' %freq)
+	def amp(self,amp):
+		self.siggen.write('AMPL %f' %amp)
+	def freq(self,freq):
+		self.siggen.write('FREQ %f' %freq)
+	def on(self):
+		self.siggen.write('OUTPUT ON')
+	def off(self):
+		self.siggen.write('OUTPUT OFF')
 
 
 
@@ -44,17 +52,17 @@ class QL335P:
 		import serial
 		s = serial.Serial(self.address, baudrate = 19200)
 		s.write(cmd)
-		s.close()	
-		
+		s.close()
+
 	def read(self):
 		import serial
 		s = serial.Serial(self.address, baudrate = 19200)
-		line = ' '		
+		line = ' '
 		while line[-1] != '\n':
 			line+=s.read()
 		line = line.strip()
 		return line
-	
+
 	def ask(self,cmd):
 		self.write(cmd)
 		return self.read()

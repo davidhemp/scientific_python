@@ -8,7 +8,7 @@ class loader:
 		filename = datetime.now().strftime("%Y%m%d-%H%M%S") + ending
 		return filename
 
-	def savedata(self,data,filename=None,path="./"):
+	def savedata(self,data,filename=None,path="./",comment =""):
 		from time import time
 		from numpy import shape
 		starttime = time()
@@ -18,9 +18,13 @@ class loader:
 		if not self.quiet:
 			print "Saving data at %s" %savename
 		with open(savename,'w') as fw:
-			if not self.quiet:
+
+			if len(comment)>0:
+				fw.write(comment + "\n\n")
+			elif not self.quiet:
 				fw.write(\
-					raw_input("Please write any comments you have:") + "\n")
+					raw_input("Please write any comments you have:") + "\n\n")
+
 			for i in range(len(data[0])):
 				line = ""
 				for j in range(len(shape(data))):
@@ -102,3 +106,11 @@ class loader:
 		else:
 			data = loadascii(filename)
 		return data
+
+	def filelist(self,folder="./",select=""):
+		from os import listdir
+		from os.path import isfile, join
+		onlyfiles = [f for f in listdir(folder) if isfile(join(folder, f))]
+		include = [k for k in onlyfiles if select in k]
+		exclude = list(set(onlyfiles) - set(include))
+		return include,exclude

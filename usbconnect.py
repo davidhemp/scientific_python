@@ -20,7 +20,7 @@ class usbtmc:
                         else:
                                 raise
                 return h
-		
+
 	def write(self, cmd):
 		h = self.connect()
 		if not cmd.endswith('\n'): cmd += '\n'
@@ -50,14 +50,24 @@ class ttyACM:
 		import serial
 		if device is None:
 			from useful import SelectAddress
-			device = SelectAddress(name,mask)
-		self.address = device
-		self.device = serial.Serial(device)
+			address = SelectAddress(name,mask)
+		try:
+			self.device = serial.Serial(address)
+		except IOError as e:
+			if str(e).find('Permission denied:'):
+				import os
+				os.system("sudo chmod 777 " + address)
+				try:
+					self.device = serial.Serial(address)
+				except:
+					raise
+			else:
+				raise
 
 	def release(self):
 		self.device.write('LOCAL\n')
 		self.device.close()
-		
+
 	def write(self,cmd):
 		if not cmd.endswith('\n'): cmd += '\n'
 		self.device.write(cmd)
@@ -69,7 +79,7 @@ class ttyACM:
 	def ask(self,cmd):
 		self.write(cmd)
 		print self.read()
-	
+
 	def query(self,cmd):
 		self.write(cmd)
 		return self.read()

@@ -29,8 +29,8 @@ class DSO1052B:
 
 	def waveform(self, channel, retake=True,points = 600,format='BYTE'):
 		from time import sleep
-		import numpy as np	
-		self.waitOPC()	
+		import numpy as np
+		self.waitOPC()
 		self.write(':WAVEFORM:SOURCE CHANNEL%u' % channel)
 		self.write(':WAVEFORM:FORMAT %s' %format.upper())
 		self.write(':WAVEFORM:POINTS:MODE RAW')
@@ -39,9 +39,9 @@ class DSO1052B:
 		sleep(1)
 		if format == 'ASCII':
 			raw = self.read(250000)
-		else:			
+		else:
 			raw = self.read(points+points*int(0.02))
-		
+
 		NN = int(raw[1])
 		N = int(raw[2:2+NN])
 		data = raw[2+NN:]
@@ -52,7 +52,6 @@ class DSO1052B:
 		if format == 'ASCII':
 			y = raw
 		else:
-			print format
 			y0 = float(self.query(':WAVEFORM:YORIGIN?'))
 			dy = float(self.query(':WAVEFORM:YINCREMENT?'))
 			yr = float(self.query(':WAVEFORM:YREF?'))
@@ -62,4 +61,3 @@ class DSO1052B:
 		dt = float(self.query(':WAVEFORM:XINCREMENT?'))
 		t = np.arange(0,len(y)*dt,dt)
 		return t,y
-
