@@ -1,120 +1,79 @@
 #!/usr/bin/python
 
-class plotter:
-	def __init__(self,quiet=False):
-		import saving
-		self.quiet = quiet
-		self.loader = saving.loader(quiet=self.quiet)
 
-	def func(x,alpha,f0,damp,noise):
-		return alpha*damp/((f0**2-x**2)**2+((x*damp)**2))+noise
+class Plotter:
+    def __init__(self, debug_on=True):
+        import debug
+        import saving
+        self.debugger = debug.Debugger(active=debug_on)
+        self.loader = saving.Loader(debug_on=debug_on)
 
-	def checkdata(self,filename=None,x=None,y=None):
-		if  (x == None or y == None) and filename != None:
-			x,y = self.loader.loaddata(filename)
-		elif (x == None or y == None) and filename == None:
-			raise IOError("Missing data or filename")
-		return x,y
+    def func(x, alpha, f0, damp, noise):
+        return alpha*damp/((f0**2-x**2)**2+((x*damp)**2))+noise
 
-	def PSDplot(self,filename=None,x=None,y=None):
-		from time import time
-		from pylab import psd,show
-		from numpy.random import randint
-		x,y = self.checkdata(filename,x,y)
-		if not self.quiet:
-			print "Generating PSD"
-			starttime = time()
-		dt = x[-1] - x[0]
-		df = 1./dt
-		PData = psd(y,NFFT=2**20,Fs=df)
-		show(randint(100))
-		if not self.quiet:
-				print "PSD generated in %i seconds" %(time()-starttime)
-		return
+    def checkdata(self, x, y, filename):
+        if (len(x) == 0 or len(y) == 0) and len(filename) > 0:
+            x, y = self.loader.loaddata(filename)
+        elif (len(x) == 0 or len(y) == 0) and len(filename) == 0:
+            raise IOError("Missing data or filename")
+        return x, y
 
-	def PSDdata(self,filename=None,x=None,y=None):
-		from time import time
-		from scipy.signal import welch
-		x,y = self.checkdata(filename,x,y)
-		if not self.quiet:
-			print "Generating PSD data"
-			starttime = time()
-		dt = x[1] - x[0]
-		df = 1/dt
-		f, Pxx_den = welch(y, fs=df, nperseg=len(y)/2)
-		if not self.quiet:
-				print "PSD data generated in %i seconds" %(time()-starttime)
-		return f, abs(Pxx_den)
+    def psdplot(self, x=[], y=[], filename=""):
+        from pylab import semilogy, show, xlabel, ylabel
+        from numpy.random import randint
+        xpsd, ypsd = self.psddata(x, y, filename)
+        semilogy(xpsd, ypsd)
+    	xlabel(r'Trap Frequency (kHz)')
+    	ylabel(r'Power Spectral Density $\mathregular{(V^2/\sqrt{Hz})}$')
+        show(randint(100))
+        return
 
-class empty:
-	def fftplot(filename,x=None,y=None,average=50,maxx=300,windows=False):
-		if x == None or y == None:
-			x,y = loaddata(filename,windows=windows)
-		print "Generating fft"
-		starttime = time()
-		A = pl.fft(y)
-		print A
-		dt = x[-1] - x[0]
-		df = 1/dt
-		N = len(x)
-		f = df*arange(N)
-		f = f[:N/2]
-		A = A[:N/2]
-		A = abs(A)
-		endtime = time()
-
-		savedata = str(filename[:-4]) + '.fft'
-		fw = open(savedata,'a')
-		for i in arange(0,len(A)):
-			fw.write(str(f[i]) + ',' + str(A[i]) + '\n')
-		fw.close()
-		print "Data saved at %s" %savedata
-		try:
-			pl.figure(69)
-			pl.plot(pl.movavg(f,average)/1e3,pl.movavg(20*log10(abs(A)),average))
-			pl.xlim([0,maxx])
-			pl.xlabel('Trap Frequency (kHz)')
-			pl.ylabel('Power Spectral Density (dB)')
-			imagefile = filename[:-4] + "fft.pdf"
-			pl.savefig(imagefile)
-			#pl.show()
-			pl.close(69)
-			print "Plot saved as %s" %imagefile
-		except Exception as E:
-			if str(E).find('TclError'):
-				print 'No graph plotted, data still saved. Are you are using Scimitar?'
-			else:
-				raise E
-		return f,A
+    def psddata(self, x=[], y=[], filename=""):
+        from time import time
+        from scipy.signal import welch
+        x, y = self.checkdata(x, y, filename)
+        self.debugger.print_msg("Generating PSD data")
+        starttime = time()
+        dt = x[1] - x[0]
+        df = 1/dt
+        f, Pxx_den = welch(y, fs=df, nperseg=len(y))
+        #total_power = 4*3.14*sum(Pxx_den)
+        #print "Total power: %s" %str(total_power)
+        #print "Average Energy: %s" %str(total_power/df)
+        self.debugger.print_msg("PSD data generated in %i seconds"
+                                % (time()-starttime))
+        return f, abs(Pxx_den)
 
 
-
-
-	def fftfit(filename,f=None,A=None):
-		if f == None or A == None:
-			f,A = fftplot(filename)
-		from scipy.optimize import curve_fit
-		print "Fitting curve"
-		popt,pcov = curve_fit(func,f,A,p0=(10**13,55000,10**4,0.1))
-		print "Fit complete, saving data"
-		savefit = str(filename[:-4]) + '.fit'
-		fw = open(savefit,'a')
-		fw.write(str(popt[0])+'\n')
-		fw.write(str(popt[1])+' Hz' + '\n')
-		fw.write(str(popt[2])+'\n')
-		fw.write(str(popt[3])+'\n')
-		for i in arange(0,len(f)):
-			fw.write(str(f[i]) + ',' + str(func(f[i],popt[0],popt[1],popt[2],popt[3])) + '\n')
-		fw.close()
-		print "Fit data saved to %s" %savefit
-
-
-	def histplot(filename,data=None,nobins=100,maxx=300):
-		print "generating histagram"
-		if data == None:
-			x,y = loaddata(filename,maxx)
-		pl.hist(y,bins=100)
-		pl.xlabel('Voltage')
-		pl.ylabel('Counts')
-		imagefile=filename[:-4]+"hist.pdf"
-		pl.savefig(imagefile)
+# class empty:
+#
+#
+# 	def fftfit(filename,f=None,A=None):
+# 		if f == None or A == None:
+# 			f,A = fftplot(filename)
+# 		from scipy.optimize import curve_fit
+# 		print "Fitting curve"
+# 		popt,pcov = curve_fit(func,f,A,p0=(10**13,55000,10**4,0.1))
+# 		print "Fit complete, saving data"
+# 		savefit = str(filename[:-4]) + '.fit'
+# 		fw = open(savefit,'a')
+# 		fw.write(str(popt[0])+'\n')
+# 		fw.write(str(popt[1])+' Hz' + '\n')
+# 		fw.write(str(popt[2])+'\n')
+# 		fw.write(str(popt[3])+'\n')
+# 		for i in arange(0,len(f)):
+# 			fw.write(str(f[i]) + ',' + \
+#                str(func(f[i],popt[0],popt[1],popt[2],popt[3])) + '\n')
+# 		fw.close()
+# 		print "Fit data saved to %s" %savefit
+#
+#
+# 	def histplot(filename,data=None,nobins=100,maxx=300):
+# 		print "generating histagram"
+# 		if data == None:
+# 			x,y = loaddata(filename,maxx)
+# 		pl.hist(y,bins=100)
+# 		pl.xlabel('Voltage')
+# 		pl.ylabel('Counts')
+# 		imagefile=filename[:-4]+"hist.pdf"
+# 		pl.savefig(imagefile)

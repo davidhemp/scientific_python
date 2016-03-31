@@ -125,8 +125,8 @@ def InterpretWaveform(raw, integersOnly=False, headersOnly=False):
                 from numpy import fromstring, int16, arange
                 integers = fromstring(wave[346:], dtype=int16)
                 if integersOnly:
-                        return (WAVEDESC, integers)
+                        return WAVEDESC, integers
                 else:
                         y = integers * WAVEDESC['VERTICAL_GAIN'] - WAVEDESC['VERTICAL_OFFSET']
                         x = arange(len(integers)) * WAVEDESC['HORIZ_INTERVAL'] + WAVEDESC['HORIZ_OFFSET']
-                        return (WAVEDESC, x, y, integers)
+                        return x, y

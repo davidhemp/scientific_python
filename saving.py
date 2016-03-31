@@ -1,59 +1,55 @@
 #For loading and saving data
-class loader:
-	def __init__(self,quiet=False):
-		self.quiet = quiet
+import sys, getopt
 
-	def generatefilename(self,ending=".txt"):
+class Loader(object):
+	def __init__(self,debug_on=True):
+		import debug
+		self.debugger = debug.Debugger(active=debug_on)
+
+	def generatefilename(self, ending=".txt"):
 		from datetime import datetime
 		filename = datetime.now().strftime("%Y%m%d-%H%M%S") + ending
 		return filename
 
-	def savedata(self,data,filename=None,path="./",comment =""):
-		from time import time
-		from numpy import shape
-		starttime = time()
-		if filename == None:
-			filename = self.generatefilename()
-		savename = path + filename
-		if not self.quiet:
-			print "Saving data at %s" %savename
-		with open(savename,'w') as fw:
+	## Saving Data ##
 
+	def savedata(self, data, filename="", comment=""):
+		from time import time
+		starttime = time()
+		if len(filename) == 0 or file.endswith("/"):
+			filename += self.generatefilename()
+		self.debugger.print_msg("Saving data at %s" %filename)
+		with open(filename,'w') as fw:
 			if len(comment)>0:
 				fw.write(comment + "\n\n")
-			elif not self.quiet:
-				fw.write(\
-					raw_input("Please write any comments you have:") + "\n\n")
-
-			for i in range(len(data[0])):
+			for row in range(len(data[0])):
 				line = ""
-				for j in range(len(shape(data))):
-					line += "%s," %data[j][i]
+				for col in range(len(data)):
+					line += "%s," %data[col][row]
 				fw.write(line[:-1] + "\n")
 
+	def simplesave(self,raw,filename=None,ending=".txt",path="./",savename=None):
+		if len(filename) == 0 or file.endswith("/"):
+			filename += self.generatefilename()
+		self.debugger.print_msg("Saving data to %s" %filename)
+		with open(savename, 'w') as fw:
+			fw.write(raw)
+
+	## Loading Data
+
 	def simpleload(self,filename):
+		from numpy import array
 		data = []
 		with open(filename) as f:
 			for line in f:
 				loadline = line.strip().split(',')
-				if len(loadline) >= 2:
-					data.append(loadline)
-		return data
+				data.append(loadline)
+		return array(data).T
 
 	def loaddata(self,filename,col=2):
-		def isfloat(linedata):
-			floatable = True
-			for value in linedata:
-				try:
-					float(value)
-				except ValueError:
-					floatable = False
-			return floatable
 
 		def loadascii(filename):
-			if not self.quiet:
-				print "Loading data from %s as ascii" %filename
-			starttime = time()
+			self.debugger.print_msg("Loading data from %s as ascii" %filename)
 
 			#Count the number of lines in the file to be loaded.
 			from platform import system
@@ -62,55 +58,53 @@ class loader:
 			if system == "Windows":
 			    size = check_output("type %s | find /c /v '~~~'" %filename)
 			elif system == "Linux":
-				size = check_output(['wc','-l',filename])
-				size = size.split(' ')
+				rows = int(check_output(['wc', '-l', filename]).split(' ')[0])
 
 			#Make and populate and empty array with the data
 			from numpy import zeros
-			data = zeros((col,int(size[0])))
+			data = zeros((col,rows))
 			with open(filename) as f:
 				i=0
 				linedata = []
 				for line in f:
 					linedata = line.strip().split(',')
-					if len(linedata) >= 2 and isfloat(linedata):
+					try:
 						for j in range(min(col,len(linedata))):
 							data[j][i] = linedata[j]
 						i+=1
-			data = data[:,:i]#wc will often over overestimate the of lines
-			endtime = time()
-			if not self.quiet:
-				print "That took %i seconds" %int(endtime - starttime)
+					except ValueError:
+						pass
+			data = data[:, :i]#wc will often over overestimate the of lines
+
 			return data
 
-		def loadRaw(filename):
-			startime = time()
-			if not self.quiet:
-				print "Loading data from %s as raw" %filename
-			f = open(filename,'rb')
-			raw = f.read()
-			if filename.endswith(".trc") or filename.endswith(".raw"):
-				from JLeCroy import InterpretWaveform
-				wave,x,y,Int = InterpretWaveform(raw)
-			if filename.endswith(".isf"):
-				from Tektronix import InterpretWaveform
-				x,y = InterpretWaveform(raw)
-			endtime = time()
-			if not self.quiet:
-				print "That took %i seconds" %int(endtime - startime)
-			return x,y
+		def loadraw(filename):
+			self.debugger.print_msg("Loading data from %s as raw" %filename)
+			with open(filename, 'rb') as f:
+				raw = f.read()
+			x, y = InterpretWaveform(raw)
+			return x, y
 
 		from time import time
-		if any(i in filename for i in [".trc",".raw",".isf"]):
-			data = loadRaw(filename)
+		startime = time()
+		if any(i in filename.split("/")[-1] for i in [".trc",".raw"]):
+			from LeCroy import InterpretWaveform
+			data = loadraw(filename)
+		elif any(i in filename for i in [".isf"]):
+			from Tektronix import InterpretWaveform
+			data = loadraw(filename)
 		else:
 			data = loadascii(filename)
+		endtime = time()
+		self.debugger.print_msg("Loading took %i seconds" \
+									%int(endtime - startime))
 		return data
 
 	def filelist(self,folder="./",select=""):
 		from os import listdir
 		from os.path import isfile, join
-		onlyfiles = [f for f in listdir(folder) if isfile(join(folder, f))]
+		onlyfiles = [(folder + f) for f in listdir(folder) \
+			if isfile(join(folder, f))]
 		include = [k for k in onlyfiles if select in k]
 		exclude = list(set(onlyfiles) - set(include))
 		return include,exclude

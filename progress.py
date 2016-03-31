@@ -1,9 +1,9 @@
 import time
 import sys
 
-class progressBar:
+class ProgressBar:
 
-	def simpleBar(self,currentPercent,starttime):
+	def simplebar(self,currentPercent,starttime):
 		from sys import stdout
 		from time import time
 
@@ -19,7 +19,7 @@ class progressBar:
 		try:
 			finishtime = (currentduration/(currentPercent)) * 100
 		except ZeroDivisionError:
-			finishtime = 9999
+			finishtime = 999*60+59
 		timeremaining = finishtime - currentduration
 		sys.stdout.write(' %d:%02d / %d:%02d Time remaining     ' \
 			% (finishtime / 60, finishtime % 60, \

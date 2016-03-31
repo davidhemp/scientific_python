@@ -76,7 +76,7 @@ class DPO2024B:
 		else:
 			self.connection = usbconnect.usbtmc()
 
-	def raw(self, n=1, pts=10000):
+	def raw(self, n=1, pts=1250000):
 		self.write(':DATA:SOURCE CH%u\n' % n)
 		self.write(':DATA:ENCDG RPB\n') # integers in range 0...255 (width = 1) or 0...65535 (width = 2)
 		self.write(':DATA:WIDTH 1\n')
@@ -97,7 +97,7 @@ class DPO2024B:
 
 		return CURVE
 
-	def data(self, n=1, pts=10000):
+	def data(self, n=1, pts=125000):
 		from time import sleep
 		try:
 			CURVE = self.raw(n, pts)
@@ -117,4 +117,11 @@ class DPO2024B:
 		y = (array(i) - float(params['YOF'])) * float(params['YMU'])
 		return (x, y, i)
 
-	def opc(self): return self.ask('*OPC?\n').strip() == '1'
+	def waitOPC(self):
+		from time import sleep
+		wait = self.query('*OPC?').strip()
+		while wait != '1':
+			sleep(0.1)
+			print wait
+			wait = self.query('*OPC?').strip()
+		return True

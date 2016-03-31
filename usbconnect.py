@@ -73,8 +73,11 @@ class ttyACM:
 		self.device.write(cmd)
 
 	def read(self):
-		line = self.device.readline()
-		return line.rstrip('\n')
+		#line = self.device.readline()
+		line = ""
+		while not line.endswith("\r") or not line.endswith("\n"):
+			line += self.device.read()
+		return line.strip()
 
 	def ask(self,cmd):
 		self.write(cmd)
