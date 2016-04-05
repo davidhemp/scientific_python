@@ -1,10 +1,10 @@
 #For loading and saving data
 import sys, getopt
+from debug import Debugger
 
-class Loader(object):
-	def __init__(self,debug_on=True):
-		import debug
-		self.debugger = debug.Debugger(active=debug_on)
+class Loader(Debugger):
+	def __init__(self,debug_mode=True):
+		Debugger.__init__(self, debug_mode)
 
 	def generatefilename(self, ending=".txt"):
 		from datetime import datetime
@@ -18,7 +18,7 @@ class Loader(object):
 		starttime = time()
 		if len(filename) == 0 or file.endswith("/"):
 			filename += self.generatefilename()
-		self.debugger.print_msg("Saving data at %s" %filename)
+		self.print_msg("Saving data at %s" %filename)
 		with open(filename,'w') as fw:
 			if len(comment)>0:
 				fw.write(comment + "\n\n")
@@ -31,7 +31,7 @@ class Loader(object):
 	def simplesave(self,raw,filename=None,ending=".txt",path="./",savename=None):
 		if len(filename) == 0 or file.endswith("/"):
 			filename += self.generatefilename()
-		self.debugger.print_msg("Saving data to %s" %filename)
+		self.print_msg("Saving data to %s" %filename)
 		with open(savename, 'w') as fw:
 			fw.write(raw)
 
@@ -49,7 +49,7 @@ class Loader(object):
 	def loaddata(self,filename,col=2):
 
 		def loadascii(filename):
-			self.debugger.print_msg("Loading data from %s as ascii" %filename)
+			self.print_msg("Loading data from %s as ascii" %filename)
 
 			#Count the number of lines in the file to be loaded.
 			from platform import system
@@ -79,7 +79,7 @@ class Loader(object):
 			return data
 
 		def loadraw(filename):
-			self.debugger.print_msg("Loading data from %s as raw" %filename)
+			self.print_msg("Loading data from %s as raw" %filename)
 			with open(filename, 'rb') as f:
 				raw = f.read()
 			x, y = InterpretWaveform(raw)
@@ -96,7 +96,7 @@ class Loader(object):
 		else:
 			data = loadascii(filename)
 		endtime = time()
-		self.debugger.print_msg("Loading took %i seconds" \
+		self.print_msg("Loading took %i seconds" \
 									%int(endtime - startime))
 		return data
 

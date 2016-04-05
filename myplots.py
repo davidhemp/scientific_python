@@ -1,19 +1,20 @@
 #!/usr/bin/python
+from saving import Loader
 
+class Plotter(Loader):
+    def __init__(self, debug_mode=True):
+        self.debug_mode = debug_mode
+        Loader.__init__(self, debug_mode)
 
-class Plotter:
-    def __init__(self, debug_on=True):
-        import debug
-        import saving
-        self.debugger = debug.Debugger(active=debug_on)
-        self.loader = saving.Loader(debug_on=debug_on)
+    def debug_toggle(self):
+        self.active = not self.active
 
     def func(x, alpha, f0, damp, noise):
         return alpha*damp/((f0**2-x**2)**2+((x*damp)**2))+noise
 
     def checkdata(self, x, y, filename):
         if (len(x) == 0 or len(y) == 0) and len(filename) > 0:
-            x, y = self.loader.loaddata(filename)
+            x, y = self.loaddata(filename)
         elif (len(x) == 0 or len(y) == 0) and len(filename) == 0:
             raise IOError("Missing data or filename")
         return x, y
@@ -32,18 +33,27 @@ class Plotter:
         from time import time
         from scipy.signal import welch
         x, y = self.checkdata(x, y, filename)
-        self.debugger.print_msg("Generating PSD data")
+        self.print_msg("Generating PSD data")
         starttime = time()
         dt = x[1] - x[0]
         df = 1/dt
-        f, Pxx_den = welch(y, fs=df, nperseg=len(y))
+        f, Pxx_den = welch(y, fs=df, nperseg=len(y), window="hanning")
         #total_power = 4*3.14*sum(Pxx_den)
         #print "Total power: %s" %str(total_power)
         #print "Average Energy: %s" %str(total_power/df)
-        self.debugger.print_msg("PSD data generated in %i seconds"
+        self.print_msg("PSD data generated in %i seconds"
                                 % (time()-starttime))
         return f, abs(Pxx_den)
 
+# Create one instance and export its methods as module-level functions.
+# This is with debug_on = True but for alot of things this is ok and can
+# be changed by running myplots._inst.__init__(False)
+
+_inst = Plotter()
+checkdata = _inst.checkdata
+psdplot = _inst.psdplot
+psddata = _inst.psddata
+debug_toggle = _inst.debug_toggle
 
 # class empty:
 #
