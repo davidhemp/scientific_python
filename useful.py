@@ -1,10 +1,5 @@
 #!/usr/bin/python
-def SelectAddress(name, mask, lastknown='/media/matterwave/David/python scripts/addresses.list'):
-        """Given an instrument name and a mask describing the valid options, provide an interactive menu for the user to select the address.
-
-        Example: SelectAddress("Thorlabs Power Meter", "/dev/ttyUSB*")
-
-        If no addresses match the mask, then an error is returned. If the named instrument has a previously known address (stored in addresses.list), then set that as default. The last known address is updated once the user selects an address."""
+def SelectAddress(name="Generic device", mask="/dev/*"):
 
         # Create a list of available choices from the given mask
         from glob import glob
@@ -40,10 +35,3 @@ def SelectAddress(name, mask, lastknown='/media/matterwave/David/python scripts/
 	choice = choiceObj.value
 
         return choice
-
-def countdown(t=10):
-	from time import sleep
-	while t!=0:
-		print t
-		t-=1
-		sleep(1)

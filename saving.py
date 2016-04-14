@@ -108,3 +108,9 @@ class Loader(Debugger):
 		include = [k for k in onlyfiles if select in k]
 		exclude = list(set(onlyfiles) - set(include))
 		return include,exclude
+
+
+_inst = Loader()
+loaddata = _inst.loaddata
+savedata = _inst.savedata
+filelist = _inst.filelist
