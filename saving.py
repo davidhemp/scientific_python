@@ -1,10 +1,13 @@
 #For loading and saving data
-import sys, getopt
-from debug import Debugger
 
-class Loader(Debugger):
+
+class Loader(object):
 	def __init__(self,debug_mode=True):
-		Debugger.__init__(self, debug_mode)
+		self.debug_mode = debug_mode
+
+	def print_msg(self, msg):
+		if self.debug_mode:
+			print msg
 
 	def generatefilename(self, ending=".txt"):
 		from datetime import datetime
@@ -28,11 +31,11 @@ class Loader(Debugger):
 					line += "%s," %data[col][row]
 				fw.write(line[:-1] + "\n")
 
-	def simplesave(self,raw,filename=None,ending=".txt",path="./",savename=None):
-		if len(filename) == 0 or file.endswith("/"):
+	def simplesave(self, raw, filename=""):
+		if len(filename) == 0 or filename.endswith("/"):
 			filename += self.generatefilename()
 		self.print_msg("Saving data to %s" %filename)
-		with open(savename, 'w') as fw:
+		with open(filename, 'w') as fw:
 			fw.write(raw)
 
 	## Loading Data
@@ -114,3 +117,6 @@ _inst = Loader()
 loaddata = _inst.loaddata
 savedata = _inst.savedata
 filelist = _inst.filelist
+generatefilename = _inst.generatefilename
+simplesave = _inst.simplesave
+simpleload = _inst.simpleload
