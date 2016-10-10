@@ -1,16 +1,40 @@
 #!/usr/bin/python
+import logging
+
+from numpy import pi, sqrt, exp, square, mean, linspace
+from numpy.random import normal
+
 from saving import Loader
 
 class Plotter(Loader):
-    def __init__(self, debug_mode=True):
-        self.debug_mode = debug_mode
-        Loader.__init__(self, debug_mode)
+    def __init__(self):
+    	logging.basicConfig(level=logging.ERROR)
+    	self.plotter_logger = logging.getLogger(__name__)
 
-    def debug_toggle(self):
-        self.active = not self.active
-
-    def func(x, alpha, f0, damp, noise):
-        return alpha*damp/((f0**2-x**2)**2+((x*damp)**2))+noise
+    def test_self(self):
+        import pylab as p
+        import numpy as np
+        freq_f = 100000
+        t = p.linspace(0, 1, 10**(6))
+        A = p.zeros(10**(6))
+        for i in xrange(len(t)):
+            freq_f += 0.1*(p.random() - 0.5)
+            A_f = 0.05 + (p.random()/2)*0.1
+            A[i] = A_f*p.sin(t[i]*2*p.pi*freq_f)
+        xpsd, ypsd = self.psd_ave([t, A])
+        y_fit = self.func(xpsd,
+                            alpha = 10**(8),
+                            f0 = 100000,
+                            damping = 200,
+                            noise = 3*10**(-10))
+        p.subplot(1, 2, 1)
+        p.plot(t[:300], A[:300])
+        p.subplot(1, 2, 2)
+        p.semilogy(xpsd, ypsd)
+        print(len(xpsd), len(y_fit))
+        p.semilogy(xpsd, y_fit)
+        p.xlim(0,200000)
+        p.show()
 
     def checkdata(self, x, y, filename):
         if (len(x) == 0 or len(y) == 0) and len(filename) > 0:
@@ -29,11 +53,22 @@ class Plotter(Loader):
         show(randint(100))
         return
 
-    def psddata(self, x=[], y=[], filename=""):
+    def psd_ave(self, data, chucks=100, filename=""):
+        n = len(data[0])/chucks
+        data_sets = [data[1][i:i+n] for i in range(0, len(data[1]), n)][:-1]
+        time_sets = [data[0][i:i+n] for i in range(0, len(data[0]), n)][:-1]
+        xpsd, ypsd = self.psddata(time_sets[0], data_sets[0])
+        for i in xrange(len(data_sets)):
+            t_xpsd, t_ypsd = self.psddata(time_sets[i], data_sets[i])
+            ypsd += t_ypsd
+        ypsd /= len(data_sets)
+        return xpsd, ypsd
+
+    def psddata(self, x, y, filename=""):
         from time import time
         from scipy.signal import welch
         x, y = self.checkdata(x, y, filename)
-        self.print_msg("Generating PSD data")
+        self.plotter_logger.info("Generating PSD data")
         starttime = time()
         dt = x[1] - x[0]
         df = 1/dt
@@ -41,43 +76,66 @@ class Plotter(Loader):
         #total_power = 4*3.14*sum(Pxx_den)
         #print "Total power: %s" %str(total_power)
         #print "Average Energy: %s" %str(total_power/df)
-        self.print_msg("PSD data generated in %i seconds"
+        self.plotter_logger.info("PSD data generated in %i seconds"
                                 % (time()-starttime))
         return f, abs(Pxx_den)
 
-# Create one instance and export its methods as module-level functions.
-# This is with debug_on = True but for alot of things this is ok and can
-# be changed by running myplots._inst.__init__(False)
+    def func(self, x, alpha, f0, damping, noise=10**(-12), feedback=0):
+        top = alpha*damping
+        bottom = (f0**2 - x**2)**2 + (x**(2))*(damping + feedback)**2
+        return top/bottom# + noise
+
+    def sum_of_squares(self, x, y, parms):
+        model = func(x, *parms)
+        return sum(square(model/y - y/model))
+
+    def fit(self, x, y, alpha, f0, damping, feedback=0, noise=10**(-12)):
+        from scipy import optimize
+        if feedback == 0 :
+            init_guess = [alpha, f0, damping]
+            bounds = [(10**(4), 10**(8)),
+                        (f0/10, f0*10),
+                        (0.1, 100)]
+
+            self.plotter_logger.info("Without feedback")
+            best_parms = self.full_solve(x, y, init_guess, bounds)
+            print(best_parms)
+        else:
+            self.plotter_logger.info("With feedback")
+
+        return best_parms
+
+    def scatter_fit_errors(self, ret):
+        plt.plot(ret.x, ret.fit_data, color='red')
+        plt.fill_between(ret.x,
+                        ret.fit_data + ret.fit_data_std,
+                        ret.fit_data - ret.fit_data_std,
+                        facecolor= "red",
+                        alpha = 0.5)
+
+        label = "%0.1f +/- %0.1f" %(ret.m, ret.m_std)
+        plt.errorbar(ret.x,
+                    ret.y,
+                    yerr = ret.y_std,
+                    xerr = ret.x_std
+                    fmt = 'o',
+                    label = label)
+
+
+""" Create one instance and export its methods as module-level functions.
+ This is with debug_on = True but for alot of things this is ok and can
+ be changed by running myplots._inst.__init__(False)
+ """
 
 _inst = Plotter()
 checkdata = _inst.checkdata
 psdplot = _inst.psdplot
 psddata = _inst.psddata
-debug_toggle = _inst.debug_toggle
+psd_ave = _inst.psd_ave
+func = _inst.func
+fit = _inst.fit
+test_self = _inst.test_self
 
-# class empty:
-#
-#
-# 	def fftfit(filename,f=None,A=None):
-# 		if f == None or A == None:
-# 			f,A = fftplot(filename)
-# 		from scipy.optimize import curve_fit
-# 		print "Fitting curve"
-# 		popt,pcov = curve_fit(func,f,A,p0=(10**13,55000,10**4,0.1))
-# 		print "Fit complete, saving data"
-# 		savefit = str(filename[:-4]) + '.fit'
-# 		fw = open(savefit,'a')
-# 		fw.write(str(popt[0])+'\n')
-# 		fw.write(str(popt[1])+' Hz' + '\n')
-# 		fw.write(str(popt[2])+'\n')
-# 		fw.write(str(popt[3])+'\n')
-# 		for i in arange(0,len(f)):
-# 			fw.write(str(f[i]) + ',' + \
-#                str(func(f[i],popt[0],popt[1],popt[2],popt[3])) + '\n')
-# 		fw.close()
-# 		print "Fit data saved to %s" %savefit
-#
-#
 # 	def histplot(filename,data=None,nobins=100,maxx=300):
 # 		print "generating histagram"
 # 		if data == None:

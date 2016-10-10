@@ -4,7 +4,7 @@ class Device(object):
 		import serial
 		if address.endswith('*'):
 			from useful import SelectAddress
-			address = SelectAddress(address, name)
+			address = SelectAddress(name, address)
 		for i in range(3):
 			try:
 				self.conn = serial.Serial(address, baudrate=baudrate)
@@ -14,7 +14,6 @@ class Device(object):
 					import os
 					print "Connection failed, try %i" %i
 					os.system("sudo chmod 777 " + address)
-
 
 	def write(self,cmd):
 		if not cmd.endswith('\n'): cmd += '\n'
@@ -32,6 +31,23 @@ class Device(object):
 		self.write(cmd)
 		sleep(0.2)
 		return self.read()
+
+	def idn(self):
+		self.ask("*IDN?")
+
+	def opc(self):
+		q = 0
+		while q != 1:
+			q = int(self.query("*OPC?"))
+
+	def write_opc(self, cmd):
+		try:
+			self.write(cmd)
+		finally:
+			self.opc()
+
+	def reset(self):
+		self.write("*RST")
 
 class ttyACM(Device):
 	def __init__(self, name='Generic ttyACM', address='/dev/ttyACM*'):

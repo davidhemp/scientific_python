@@ -1,12 +1,12 @@
 #!/usr/bin/python
-def SelectAddress(name="Generic device", mask="/dev/*"):
+def SelectAddress(name="Generic device", address="/dev/*"):
 
         # Create a list of available choices from the given mask
         from glob import glob
-        choices = glob(mask)[::-1]
+        choices = glob(address)[::-1]
 
         # Use a curses-based menu system to allow the user to select a device
-        # Lifted from urwid "Simple Menu" example and hacked in a very un-pythonic way to return a value
+        # Lifted from urwid "Simple Menu" example and hacked in a ver   y un-pythonic way to return a value
         # http://excess.org/urwid/docs/tutorial/
 	class storeValue:
 		def __init__(self, value):

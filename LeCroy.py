@@ -1,5 +1,5 @@
 #!/usr/bin/python
-class HDO6104:
+class HDO6104(object):
 	def __init__(self, address='LCRY-matterwave.clients.soton.ac.uk'):
 		self.address = address
 		import vxi11
@@ -11,9 +11,9 @@ class HDO6104:
 
 	def raw(self, channel=1):
 		self.write('COMM_FORMAT DEF9,WORD,BIN')
-		self.write('STOP')
-		self.write('ARM')
-		self.write("FRTR")
+		# self.write('STOP')
+		# self.write('ARM')
+		# self.write("FRTR")
 		self.waitOPC()
 		self.write('C%u:WAVEFORM?' % channel)
 		return self.read_raw()
@@ -30,6 +30,10 @@ class HDO6104:
 
 	def opc(self):
 		return self.ask('*OPC?')[-1] == '1'
+
+class HDO4022(HDO6104):
+	def __init__(self, address='200MHZ-LCRY-MAT.clients.soton.ac.uk'):
+		super(HDO4022, self).__init__(address)
 
 ## The code below was auto-generated and so is quite hard to read, but it works
 
