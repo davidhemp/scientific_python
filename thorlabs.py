@@ -16,4 +16,4 @@ class PM100USB(usbconnect.usbtmc):
 		self.write('CONF:POW')
 
 	def read_power(self):
-		return self.query('READ?')
+		return float(self.query('READ?'))

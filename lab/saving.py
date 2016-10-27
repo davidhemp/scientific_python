@@ -2,10 +2,6 @@
 from time import time
 from datetime import datetime
 import logging
-from collections import namedtuple
-import unittest
-
-from data_sets import TimeData
 
 class Loader(object):
 	def __init__(self, level='DEBUG'):
@@ -25,15 +21,7 @@ class Loader(object):
 		self.logger.setLevel(level_value)
 		self.logger.addHandler(sh)
 
-	def checkdata(self, time_data, filename):
-		if type(time_data.x) == property:
-			time_data = self.loaddata(filename)
-		elif type(time_data.x) == property and len(filename) == 0:
-			raise IOError("Missing data or filename")
-		return time_data
-
 	def generate_filename(self, ending = ".txt"):
-
 		filename = datetime.now().strftime("%Y-%m-%d-%H_%M_%S") + ending
 		self.logger.debug("Genrating filename, %s" %filename)
 		return filename
@@ -56,14 +44,8 @@ class Loader(object):
 	## Loading Data
 
 	def load_data(self, filename, col = 2, time_data = True):
-		"""Able to load all raw file types from LeCory or Tektronix as well as cvs files. A named tuple is returned with values: x, y, xpsd, ypsd."""
-		# def simple_load(filename, delimiter = ','):
-		# 	"""Loads the file as a csv using the csv module."""
-		# 	import csv
-		# 	with open(filename, 'rb') as f:
-		# 		reader = csv.reader(f, delimiter=delimiter)
-		# 		data = reader.readlines()
-		# 	return data
+		"""Able to load all raw file types from LeCory or Tektronix as well as
+		 cvs files. A named tuple is returned with values: x, y, xpsd, ypsd."""
 
 		def load_ascii(filename):
 			"""Loads any ascii file into a numpy array. It populates the array
@@ -107,30 +89,4 @@ class Loader(object):
 
 		endtime = time()
 		self.logger.debug("Loading took %i seconds" % int(endtime - startime))
-		if time_data == True:
-			fs = len(data[0])/(2*data[0][-1])
-			data = TimeData(filename = filename, x=data[0], y=data[1], fs=fs)
 		return data
-
-	def file_list(self, folder="./", select="", repeats = 0):
-		from os import listdir
-		from os.path import isfile, join
-		ret = namedtuple('file_list', ['include', 'exclude', 'chunked'])
-		onlyfiles = [(folder + f) for f in listdir(folder) \
-			if isfile(join(folder, f))]
-		ret.include = sorted([k for k in onlyfiles if select in k])
-		ret.exclude = sorted(list(set(onlyfiles) - set(ret.include)))
-		_line = []
-		for i in range(len(ret.include)/repeats):
-			_line.append(ret.include[repeats*i:repeats*(i+1)])
-		ret.chucked = _line
-		return ret
-
-
-
-_inst = Loader()
-load_data = _inst.load_data
-save_data = _inst.save_data
-logger = _inst.logger
-file_list = _inst.file_list
-checkdata = _inst.checkdata

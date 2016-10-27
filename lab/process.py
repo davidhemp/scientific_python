@@ -6,16 +6,15 @@ import numpy as np
 from scipy.signal import butter, lfilter, freqz
 from scipy.optimize import basinhopping, curve_fit
 
-from data_sets import PSDData
 #saving.logger.setLevel(logging.INFO)
 
 class Processer(object):
-    def __init__(self, level="ERROR"):
+    def __init__(self, level="DEBUG"):
         self.logger = logging.getLogger("Processing")
         try:
             level_value = eval('logging.%s' %level.upper())
         except AttributeError:
-            level_value = logging.ERROR
+            level_value = logging.DEBUG
             print('Logging level not found, default to DEBUG')
         self.logger.setLevel(level_value)
 
@@ -27,11 +26,11 @@ class Processer(object):
         self.logger.setLevel(level_value)
         self.logger.addHandler(sh)
 
-
-    def rms(self, y):
+    @staticmethod
+    def rms(y):
         return np.sqrt(np.mean(np.square(y)))
 
-    def butterworth_filter(self, time_data, lowcut=0, highcut=1,
+    def butterworth_filter(self, y, fs, lowcut=0, highcut=1,
                             btype = 'band', order=5):
 
         def butter_b_a(lowcut, highcut, fs, order=5, btype='band'):
@@ -84,75 +83,56 @@ class Processer(object):
 
         self.logger.debug('Filtering data')
         start_time = time()
-        b, a =  butter_b_a(lowcut, highcut, time_data.fs,
-                            order = order, btype = btype)
-        time_data.filter_response = get_filter_response(
-                                                    a=a,
-                                                    b=b,
-                                                    sample_freq=time_data.fs)
-        filtered = lfilter(b, a, time_data.y)
+        b, a =  butter_b_a(lowcut, highcut, fs, order = order, btype = btype)
+        response = get_filter_response(a = a, b = b, sample_freq = fs)
+        filtered = lfilter(b, a, y)
         self.logger.debug("Data filtered in %i seconds" % (time()-start_time))
-        return filtered
+        return filtered, response
 
-    def psd(self, x, y, fs, filename="", key=0):
+    def psd(self, x, y, fs):
         from scipy.signal import welch
-        # self.logger.debug("Generating PSD data")
+        self.logger.debug("Generating PSD data")
         start_time = time()
-        f, Pxx_den = welch(y,
-                        fs = fs,
-                        nperseg = 1000000,
-                        window = "hanning")
-        # self.logger.debug("PSD data generated in %i seconds"
-                                # % (time()-start_time))
-        return f, Pxx_den
-
-    def peak_cuts(self, psd_data, bandwidth = 10000):
-        cuts = dict()
-        for key, center in psd_data.centers.iteritems():
-            clause1 = psd_data.xpsd >= (center - bandwidth)
-            clause2 = psd_data.xpsd <= (center + bandwidth)
-            clause = clause1 * clause2
-            cuts[key] = np.where(clause)[0]
-        return cuts
-
-    def phase_space(self, x, y, trap_freq, fs, gamma = 1e5, offset = 0):
-        start_time = time()
-        momentum = []
-        scale = 10**9
-        position = scale*(y + offset)/gamma
-        for i in range(len(position)-1):
-            momentum.append(fs*(position[i+1]-position[i])/(trap_freq*2*np.pi))
-        self.logger.debug("Phase space data generated in %i seconds"
+        xpsd, ypsd = welch(y, fs = fs, nperseg = 1e6, window = "hanning")
+        self.logger.debug("PSD data generated in %i seconds"
                                 % (time()-start_time))
-        return position[:-1], momentum
+        return xpsd, ypsd
 
-    def psd_fit(self, psd_data, feedback = False):
-        def taylor_damping(r):
-            d = 364e-12
-            viscosity = 18.6e-6
-            density = 2650
-            kb = 1.38e-23
-            top = 0.619*9*np.pi*viscosity*d**2
-            bottom = np.sqrt(2)*density*kb*300
-            return (self.pressure*top)/(r*bottom)
+    def cut_peak(self, center, xpsd, ypsd, bandwidth = 10000):
+        clause1 = xpsd >= (center - bandwidth)
+        clause2 = xpsd <= (center + bandwidth)
+        clause = clause1 * clause2
+        cut_indexs = np.where(clause)[0]
+        return xpsd[cut_indexs], ypsd[cut_indexs]
 
-        def model(x, r, w0, gamma, feedback = 0, deltaw0 = 0):
-            w0 = w0*2*np.pi
-            x = x*2*np.pi
-            deltaw0 = deltaw0*2*np.pi
-            mass = 2650*(4./3)*np.pi*r**3
-            damping = taylor_damping(r)
-            top = 1.38*10**-(23)*300*damping/(np.pi*mass)
-            w = w0 + deltaw0
-            feedback_g = damping + feedback
-            bottom = ((w)**2 - x**2)**2 + (x*(feedback_g))**2
-            return gamma**2*top/bottom + self.noise
+    def taylor_damping(self, r):
+        d = 364e-12
+        viscosity = 18.6e-6
+        density = 2650
+        kb = 1.38e-23
+        top = 0.619*9*np.pi*viscosity*d**2
+        bottom = np.sqrt(2)*density*kb*300
+        return (self.pressure*100*top)/(r*bottom)
 
+    def model(self, x, r, w0, gamma, feedback = 0, deltaw0 = 0):
+        w0 = w0*2*np.pi
+        x = x*2*np.pi
+        deltaw0 = deltaw0*2*np.pi
+        mass = 2650*(4./3)*np.pi*r**3
+        damping = self.taylor_damping(r)
+        top = 1.38*10**-(23)*300*damping/(np.pi*mass)
+        w = w0 + deltaw0
+        feedback_g = damping + feedback
+        bottom = ((w)**2 - x**2)**2 + (x*(feedback_g))**2
+        return gamma**2*top/bottom + self.noise
+
+    def psd_fit(self, xdata, ydata, freq_center, feedback=False,
+                mbar_fit_parms = []):
         def model_feedback(x, feedback, deltaw0 = 1000):
-            return model(x, self.r, self.w0, self.gamma, feedback, deltaw0)
+            return self.model(x, self.r, self.w0, self.gamma,
+                            feedback, deltaw0)
 
-        def fitting_with_feedback(psd_data, key,
-                                    feedback = 0.11, deltaw0 = 1000):
+        def fitting_with_feedback(key, feedback = 0.11, deltaw0 = 1000):
             self.r, self.w0, self.gamma = psd_data.fit_parms[key][:3]
             p0 = [feedback]
             popt, pcov = curve_fit(model_feedback, self.xdata,
@@ -160,43 +140,52 @@ class Processer(object):
             parms = [self.r, self.w0, self.gamma, popt[0]]
             return parms, pcov
 
-        def fitting(f0 = 56399, r = 38*10**-9, gamma = 5*10e4):
+        def fitting(xdata, ydata, f0):
+            r = 38*10**-9
+            gamma = 5*10e4
             p0 = [r, f0, gamma]
+            n = 5
             while True:
-                popt, pcov = curve_fit(model,
-                                        self.xdata,
-                                        self.ydata,
-                                        p0 = p0)
+                popt, pcov = curve_fit(self.model, xdata, ydata, p0 = p0)
                 if all(value > 0 for value in popt):
                     break
                 else:
-                    print('Negative fits')
+                    n -= 1
+                    self.logger.error('Negative fits: tries remaining %i' %n)
+                    if n <= 0:
+                        raise ValueError(
+                                'Could not find positive values for fit')
             return popt, pcov
 
-        self.pressure = psd_data.pressure*100
-        self.noise = psd_data.noise
-        fit_parms = dict()
-        fit_errors = dict()
-        for key, center in psd_data.centers.iteritems():
-            self.xdata = psd_data.xpsd[psd_data.cuts[key]]
-            self.ydata = psd_data.ypsd[psd_data.cuts[key]]
-            if feedback:
-                fit_parms[key], fit_errors[key] = \
-                                        fitting_with_feedback(psd_data, key)
-            else:
-                fit_parms[key], fit_errors[key] = fitting(f0 = center)
+        if feedback:
+            fit_parms, fit_errors = fitting_with_feedback(
+                                                xdata, ydata, mbar_fit_parms)
+        else:
+            fit_parms, fit_errors = fitting(xdata, ydata, freq_center)
         return fit_parms, fit_errors
 
-_inst = Processer()
-logger = _inst.logger
-butterworth_filter = _inst.butterworth_filter
-psd = _inst.psd
-phase_space = _inst.phase_space
-peak_cuts = _inst.peak_cuts
-psd_fit = _inst.psd_fit
-rms = _inst.rms
+    def psd_ave(self, data, chucks=100, filename=""):
+        n = len(data[0])/chucks
+        data_sets = [data[1][i:i+n] for i in range(0, len(data[1]), n)][:-1]
+        time_sets = [data[0][i:i+n] for i in range(0, len(data[0]), n)][:-1]
+        xpsd, ypsd = self.psddata(time_sets[0], data_sets[0])
+        for i in xrange(len(data_sets)):
+            t_xpsd, t_ypsd = self.psddata(time_sets[i], data_sets[i])
+            ypsd += t_ypsd
+        ypsd /= len(data_sets)
+        return xpsd, ypsd
 
-import saving
+    def phase_space(self, x, y, trap_freq, fs, gamma=1e5):
+        start_time = time()
+        momentum = []
+        scale = 10**9
+        position = scale*(y)/gamma
+        for i in range(len(position)-1):
+            momentum.append(fs*(position[i+1]-position[i])/(trap_freq*2*np.pi))
+        self.logger.debug("Phase space data generated in %i seconds"
+                                % (time()-start_time))
+        return position[:-1], momentum
+
 
 class EFieldDisplacement(object):
     def __init__(self, power = 0.5):

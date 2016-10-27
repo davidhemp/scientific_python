@@ -1,50 +1,22 @@
 #!/usr/bin/python
-import logging
 from time import time
 
 import numpy as np
 import matplotlib.pyplot as plt
 
-from process import Processer
-
-class Plotter(Processer):
+class Plotter(object):
     def __init__(self, level='DEBUG'):
-        self.logger = logging.getLogger("Myplots")
-        try:
-            level_value = eval('logging.%s' %level.upper())
-        except AttributeError:
-            print('Logging level not found, default to DEBUG')
-            level_value = logging.DEBUG
-        self.logger.setLevel(level_value)
+        pass
 
-    	# create the logging file handler
-    	sh = logging.StreamHandler()
-    	format_string = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    	formatter = logging.Formatter(format_string)
-    	sh.setFormatter(formatter)
-    	self.logger.setLevel(level_value)
-    	self.logger.addHandler(sh)
-
-    def psd_plot(self, psd_data):
-        plt.figure('PSD data for %s' %psd_data.filename)
-        plt.semilogy(psd_data.xpsd/1000, psd_data.ypsd)
+    def plot_psd(self, xpsd, ypsd, fig_name = 'PSD data'):
+        plt.figure(fig_name)
+        plt.semilogy(xpsd/1000, ypsd)
         plt.xlim(0, 300)
     	plt.xlabel(r'Trap Frequency (kHz)')
     	plt.ylabel(r'Power Spectral Density $\mathregular{(V^2/\sqrt{Hz})}$')
         return
 
-    def psd_ave(self, data, chucks=100, filename=""):
-        n = len(data[0])/chucks
-        data_sets = [data[1][i:i+n] for i in range(0, len(data[1]), n)][:-1]
-        time_sets = [data[0][i:i+n] for i in range(0, len(data[0]), n)][:-1]
-        xpsd, ypsd = self.psddata(time_sets[0], data_sets[0])
-        for i in xrange(len(data_sets)):
-            t_xpsd, t_ypsd = self.psddata(time_sets[i], data_sets[i])
-            ypsd += t_ypsd
-        ypsd /= len(data_sets)
-        return xpsd, ypsd
-
-    def psd_with_fit(self, psd_data):
+    def psd_with_fit(self):
         def taylor_damping(r):
             d = 364e-12
             viscosity = 18.6e-6
@@ -52,7 +24,7 @@ class Plotter(Processer):
             kb = 1.38e-23
             top = 0.619*9*np.pi*viscosity*d**2
             bottom = np.sqrt(2)*density*kb*300
-            return (self.pressure*top)/(r*bottom)
+            return (self.pressure*100*top)/(r*bottom)
 
         def model_psd(x, r, w0, gamma, feedback = 0, deltaw0 = 0):
             w0 = w0*2*np.pi
@@ -64,17 +36,16 @@ class Plotter(Processer):
             bottom = ((w0 + deltaw0)**2 - x**2)**2 + (x*(damping + feedback))**2
             return gamma**2*top/bottom + self.noise
 
-        self.pressure = psd_data.pressure*100
-        self.noise = psd_data.noise
-        plt.figure('PSD with fits for %s' %psd_data.filename)
-        for key in psd_data.fit_parms.keys():
-            xpsd = psd_data.xpsd[psd_data.cuts[key]]
-            plt.semilogy(xpsd/1000, psd_data.ypsd[psd_data.cuts[key]])
-            ypsd_fit = model_psd(xpsd, *psd_data.fit_parms[key])
-            plt.semilogy(xpsd/1000, ypsd_fit, label=key)
+        plt.figure('PSD with fits for %s' %self.filename)
+        for key in self.fit_parms.keys():
+            xpsd = self.cuts[key][0]
+            plt.semilogy(self.cuts[key][0]/1000, self.cuts[key][1])
+            ypsd_fit = model_psd(self.cuts[key][0], *self.fit_parms[key])
+            plt.semilogy(self.cuts[key][0]/1000, ypsd_fit, label=key)
         plt.xlim(0, 300)
     	plt.xlabel(r'Trap Frequency (kHz)')
     	plt.ylabel(r'Power Spectral Density $\mathregular{(V^2/\sqrt{Hz})}$')
+        plt.show()
         return
 
     def scatter_fit_errors(self, ret):
@@ -145,17 +116,7 @@ class Plotter(Processer):
     #     ax.set_xlim([0, SampleFreq/2.0])
     #     _plt.show()
 
-""" Create one instance and export its methods as module-level functions.
- This is with debug_on = True but for alot of things this is ok and can
- be changed by running myplots._inst.__init__(False)
- """
-
-_inst = Plotter()
-psd_plot = _inst.psd_plot
-scatter_fit_errors = _inst.scatter_fit_errors
-psd_ave = _inst.psd_ave
-hist2d = _inst.hist2d
-psd_with_fit = _inst.psd_with_fit
+"""
 # 	def histplot(filename,data=None,nobins=100,maxx=300):
 # 		print "generating histagram"
 # 		if data == None:
@@ -190,3 +151,4 @@ psd_with_fit = _inst.psd_with_fit
     #     p.semilogy(xpsd, y_fit)
     #     p.xlim(0,200000)
     #     p.show()
+"""

@@ -1,4 +1,6 @@
 #!/usr/bin/python
+import os
+
 class Device(object):
 	def __init__(self, name="Generic device", address='/dev/*', baudrate=19200):
 		import serial
@@ -65,16 +67,23 @@ class ttyUSB(Device):
 
 class usbtmc(Device):
 	def __init__(self, name='Generic usbtmc device', address='/dev/usbtmc*'):
+		self.ADDRESS = address
 		if address.endswith('*'):
 			from useful import SelectAddress
-			self.address = SelectAddress(name, address)
+			self.ADDRESS = SelectAddress(name, address)
 		for i in range(3):
 			try:
-				self.conn = open(self.address, 'r+')
+				self.CONN = os.open(self.ADDRESS, os.O_RDWR)
 				break
 			except IOError as e:
 				if str(e).find('Permission denied:'):
-					import os
 					os.system("sudo chmod 777 " + self.address)
 			print "Connection failed, try %i" %i
-		self.conn.flush
+
+	def write(self,cmd):
+		os.write(self.CONN, cmd)
+
+	def read(self, length=None):
+		if length is None:
+			length = 4000
+		return os.read(self.CONN, length)

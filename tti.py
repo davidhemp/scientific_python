@@ -20,13 +20,16 @@ class TG5011(usbconnect.ttyACM):
 	def off(self):
 		self.write('OUTPUT OFF')
 
+	def dcoffset(self, amp):
+		self.write('DCOFFS %0.3f' %amp)
+
 
 class QL335P(usbconnect.ttyUSB):
 	def set_voltage(self, voltage, port=1):
 		self.write_opc("V%i %f" %(port, voltage)) #verify "V1V 1.0" doesn't work
 
 	def set_current(self, current, port=1):
-		self.write_opc("I%i %f" %(port, voltage))
+		self.write_opc("I%i %f" %(port, current))
 
 	def read_voltage(self, port=1):
 		return self.query('V%i?' %port)
