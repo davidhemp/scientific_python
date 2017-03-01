@@ -1,41 +1,71 @@
-from time import sleep
-import logging
+from time import sleep, strftime, localtime, time
+from sys import stdout
+import os
 
 import zi
 import LeCroy
+import ITR90Pressure
+
+def save_pressure(filename, start_pressure, end_pressure):
+    stamp = strftime('%Y-%m-%d_%H-%M-%S', localtime(time()))
+    print("\tPressure range %0.2e - %0.2e mbar" %(start_pressure,
+    end_pressure))
+    with open(log_filename, "a") as logfile:
+        logfile.write(','.join(str(i) for i in (stamp,
+                                                "%05i" %filename,
+                                                "%0.3e" %start_pressure,
+                                                "%0.3e" %end_pressure)))
+        logfile.write('\n')
+    return
+
+def countdown(string, time):
+    wait_count = 0
+    while wait_count <= time:
+        sleep(1)
+        stdout.write("\r\t%s: %i seconds" %(string, (time - wait_count)))
+        stdout.flush()
+        wait_count += 1
 
 scope = LeCroy.HDO6104()
-zibox = zi.HF2LI(address="192.168.0.100", port=1250)
-logging.basicConfig(level=logging.INFO)
+zibox = zi.HF2LI(address="192.168.0.100", port=1251)
 
-path = "/media/lazarus/David/rawdata/warm up/feedback/efield/"
-runs = xrange(200)
-channels = [1,2]
+path = '/media/lazarus/David/rawdata/efield/1/reheating'
+runs = 200
+channels = [1,3]
+wait = 10
 
-scope.write('STOP')
+print "Channels %s will be saved to %s" % (','.join(str(c) for c in channels),
+path)
 
-for voltage in [0, 10]:
-    raw_input('Set to %s Volts' %voltage)
-    for i in runs:
-        scope.write('STOP')
-        sleep(0.5)
-        scope.write('ARM')
-        logging.debug('Scope triggered')
+#The first pressure measurements are normally junk so they are junked
+_ = ITR90Pressure.measuredPressure()
+_ = ITR90Pressure.measuredPressure()
+
+for voltage in [0, 5]:
+    log_filename = path + '/%i/pressure.log' %voltage
+    raw_input('Set to %s Volts and change save folder' %voltage)
+    for run_count in range(runs):
+        start_pressure = ITR90Pressure.measuredPressure()
+        for _ in ['STOP', 'ARM', 'FORCE_TRIGGER']:
+            scope.write(_)
+            sleep(0.5)
         sleep(2)
         zibox.demod_output_off(signal=1, demod=2)
-        sleep(10)
+        countdown("Acquiring data for %i" %run_count, wait)
         zibox.demod_output_on(signal=1, demod=2)
-        # for channel in channels:
-        logging.info('Save %s' %i)
-        scope.write("STORE C1,FILE")
-        sleep(10)
-        scope.write("STORE C2,FILE")
-        sleep(10)
-            # filename = "C%s_%02iV%05i.trc" %(channel, voltage, i)
-            # logging.debug('Acquiring data')
-            # raw = scope.raw(channel=channel)
-            # logging.debug('Data acquired')
-            # with open(path + filename, 'w') as fw:
-            #     logging.info('Saving data to %s' %filename)
-            #     fw.write(raw)
+        stdout.write("\r\tData acquired for run %i             \n" %run_count)
+        stdout.flush()
+        end_pressure = ITR90Pressure.measuredPressure()
+        save_pressure(run_count, start_pressure, end_pressure)
+        sleep(2)
+        for channel in channels:
+            scope.write("STORE C%s,FILE" %channel)
+            countdown("Saving channel %s" %channel, 60)
+            filename = path + "/%i/C%i_%05i.trc" %(voltage, channel, run_count)
+            if not os.path.isfile(filename):
+                stdout.write('\n')
+                stdout.flush()
+                raw_input("File not found, perform manual save.")
+        stdout.write("\r\tChannel %s saved                    \n" %channel)
+        print("Data saved for run %i" %run_count)
 zibox.close()

@@ -16,6 +16,10 @@ class HF2LI(object):
         self.s.send(cmd + "\r\n")
         sleep(2)
 
+    def fast_switch(self, signal, demod):
+        cmd ="Fast,%i,%i" %(signal-1, demod-1)
+        self.write(cmd)
+
     def demod_output_on(self, signal, demod):
         cmd = "%sSIGOUTS/%s/ENABLES/%s 1" %(self.dev,
                                             str(signal-1),

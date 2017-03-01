@@ -8,9 +8,9 @@ from scipy.optimize import basinhopping, curve_fit
 
 #saving.logger.setLevel(logging.INFO)
 
-class Processer(object):
-    def __init__(self, level="DEBUG"):
-        self.logger = logging.getLogger("Processing")
+class Processor(object):
+    def __init__(self, level="DEBUG", logger_name = "Processing"):
+        self.logger = logging.getLogger(logger_name)
         try:
             level_value = eval('logging.%s' %level.upper())
         except AttributeError:
@@ -26,9 +26,17 @@ class Processer(object):
         self.logger.setLevel(level_value)
         self.logger.addHandler(sh)
 
-    @staticmethod
+    @classmethod
     def rms(y):
         return np.sqrt(np.mean(np.square(y)))
+
+    def mov_ave(self, data, pnts=50):
+        rtn = []
+        self.logger.debug("Preforming moving average")
+        for i in range(0, len(data)-pnts):
+            rtn.append(np.mean(data[i:i+pnts]))
+        self.logger.debug("Moving average completed in %i seconds")
+        return np.array(rtn)
 
     def butterworth_filter(self, y, fs, lowcut=0, highcut=1,
                             btype = 'band', order=5):
@@ -89,18 +97,18 @@ class Processer(object):
         self.logger.debug("Data filtered in %i seconds" % (time()-start_time))
         return filtered, response
 
-    def psd(self, x, y, fs):
+    def psd(self, x, y, fs, nperseg = 1e6):
         from scipy.signal import welch
         self.logger.debug("Generating PSD data")
         start_time = time()
-        xpsd, ypsd = welch(y, fs = fs, nperseg = 1e6, window = "hanning")
+        xpsd, ypsd = welch(y, fs = fs, nperseg = nperseg, window = "hanning")
         self.logger.debug("PSD data generated in %i seconds"
                                 % (time()-start_time))
         return xpsd, ypsd
 
-    def cut_peak(self, center, xpsd, ypsd, bandwidth = 10000):
-        clause1 = xpsd >= (center - bandwidth)
-        clause2 = xpsd <= (center + bandwidth)
+    def cut_peak(self, center, xpsd, ypsd, bandwidth = 40000):
+        clause1 = (xpsd >= (center - bandwidth))
+        clause2 = (xpsd <= (center + bandwidth))
         clause = clause1 * clause2
         cut_indexs = np.where(clause)[0]
         return xpsd[cut_indexs], ypsd[cut_indexs]
@@ -114,55 +122,100 @@ class Processer(object):
         bottom = np.sqrt(2)*density*kb*300
         return (self.pressure*100*top)/(r*bottom)
 
-    def model(self, x, r, w0, gamma, feedback = 0, deltaw0 = 0):
+    def damping(self, r):
+        kb = 1.38e-23
+        d = 364e-12
+        L = 1e-6
+        Kn = (kb*300)/(L*np.sqrt(2)*np.pi*d**2*self.pressure*100)
+        viscosity = 18.6e-6
+        mass = 2650*(4./3)*np.pi*r**3
+        left = (6*np.pi*viscosity*r)/(mass)
+        center = 0.619/(0.619+Kn)
+        right = (0.31*Kn)/(0.785+1.152*Kn+Kn**2)
+        return left*center*right
+
+    def model(self, x, r, w0, gamma, feedback = 0, deltaw0 = 0, *args):
+        if r<0 or w0<0 or gamma<0 or feedback<0:
+            return x*1e9
         w0 = w0*2*np.pi
         x = x*2*np.pi
         deltaw0 = deltaw0*2*np.pi
         mass = 2650*(4./3)*np.pi*r**3
-        damping = self.taylor_damping(r)
-        top = 1.38*10**-(23)*300*damping/(np.pi*mass)
+        damping = self.damping(r)
+        left = 1.38*10**-(23)*300/(np.pi*mass)
+        right_top = damping
         w = w0 + deltaw0
         feedback_g = damping + feedback
-        bottom = ((w)**2 - x**2)**2 + (x*(feedback_g))**2
-        return gamma**2*top/bottom + self.noise
+        right_bottom = ((w)**2 - x**2)**2 + (x*(feedback_g))**2
+        right = right_top/right_bottom
+        return gamma**2*left*right/(2*np.pi)**3 + self.noise
 
-    def psd_fit(self, xdata, ydata, freq_center, feedback=False,
-                mbar_fit_parms = []):
-        def model_feedback(x, feedback, deltaw0 = 1000):
+    def imp_model(self, x, w0, damping, feedback=0, noise = 1e-12):
+        if w0<0 or feedback<1:
+            return x*1e9
+        mass = 2650*(4./3)*np.pi*self.r**3
+        constant = 1.38*10**-(23)*300/(np.pi*mass)
+        top = self.gamma*(constant*damping)
+        bottom = (w0**2-x**2)**2+(damping+feedback)**2*x**2
+        return top/bottom+noise
+
+    def psd_fit(self, x, y, freq_center, pressure, noise,
+                ref_parms = [], ref_errors = [], feedback=False):
+
+        def model_feedback(x, feedback, deltaw0):
             return self.model(x, self.r, self.w0, self.gamma,
                             feedback, deltaw0)
 
-        def fitting_with_feedback(key, feedback = 0.11, deltaw0 = 1000):
-            self.r, self.w0, self.gamma = psd_data.fit_parms[key][:3]
-            p0 = [feedback]
-            popt, pcov = curve_fit(model_feedback, self.xdata,
-                                    self.ydata, p0 = p0)
-            parms = [self.r, self.w0, self.gamma, popt[0]]
-            return parms, pcov
+        def fitting_with_feedback(x, y,
+                                    ref_parms, ref_errors):
+            self.r, self.w0, self.gamma = ref_parms[:3]
+            if len(ref_parms) == 5:
+                feedback = ref_parms[3]
+                deltaw0 = ref_parms[4]
+            else:
+                feedback = 1
+                deltaw0 = 1000
+            p0 = [feedback, deltaw0]
+            popt, pcov = curve_fit(model_feedback, x, y, p0 = p0)
+            gamma0 = self.damping(self.r)
+            T = 300*gamma0/(gamma0 + popt[0])
+            parms = [self.r, self.w0, self.gamma, popt[0], popt[1], T]
+            if type(pcov) == type(0.1):
+                return parms, ref_errors + [1e10, 1e10, 1e10]
+            errors = list(np.sqrt(np.absolute(np.diag(pcov))))
+            error_r = np.square(ref_errors[0]/ref_parms[0])
+            error_feedback = np.square(errors[0]/popt[0])
+            error_T = np.sqrt(2*0.3**2 + error_r + error_feedback)*T
+            errors.append(error_T)
+            return parms, ref_errors + errors
 
-        def fitting(xdata, ydata, f0):
-            r = 38*10**-9
-            gamma = 5*10e4
+        def fitting(x, y, f0):
+            r = 100e-9
+            gamma = 1e5
             p0 = [r, f0, gamma]
             n = 5
             while True:
-                popt, pcov = curve_fit(self.model, xdata, ydata, p0 = p0)
-                if all(value > 0 for value in popt):
+                popt, pcov = curve_fit(self.model, x, y, p0 = p0)
+                if all(i>0 for i in popt):
                     break
                 else:
-                    n -= 1
-                    self.logger.error('Negative fits: tries remaining %i' %n)
+                    logger.error('Negative fit parms: %i trys left' %n)
+                    n-=0
                     if n <= 0:
-                        raise ValueError(
-                                'Could not find positive values for fit')
-            return popt, pcov
+                        raise ValueError('Negative values used')
+            errors = np.sqrt(np.absolute(np.diag(pcov)))
+            return popt, errors
 
+        self.noise = noise
+        self.pressure = pressure
         if feedback:
-            fit_parms, fit_errors = fitting_with_feedback(
-                                                xdata, ydata, mbar_fit_parms)
+            fit_parms, fit_errors = fitting_with_feedback( x,
+                                                            y,
+                                                            ref_parms,
+                                                            ref_errors)
         else:
-            fit_parms, fit_errors = fitting(xdata, ydata, freq_center)
-        return fit_parms, fit_errors
+            fit_parms, fit_errors = fitting(x, y, freq_center)
+        return list(fit_parms), list(fit_errors)
 
     def psd_ave(self, data, chucks=100, filename=""):
         n = len(data[0])/chucks
@@ -184,7 +237,7 @@ class Processer(object):
             momentum.append(fs*(position[i+1]-position[i])/(trap_freq*2*np.pi))
         self.logger.debug("Phase space data generated in %i seconds"
                                 % (time()-start_time))
-        return position[:-1], momentum
+        return np.array(position[:-1]), np.array(momentum)
 
 
 class EFieldDisplacement(object):

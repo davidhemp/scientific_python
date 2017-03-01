@@ -12,7 +12,7 @@ class MDO4104B:
 		self.write(cmd)
 		return(self.read())
 
-	def SaveWaveform(self,filename,channel="ALL"):
+	def save_waveform(self,filename,channel="ALL"):
 		from time import sleep
 		self.write("SAV:WAVE:FILEF INTERN")
 		if channel != "ALL":
@@ -27,7 +27,7 @@ class MDO4104B:
 			sleep(1)
 
 
-def InterpretWaveform(raw):
+def interpret_waveform(raw):
 	from numpy import linspace
 	from struct import unpack
 	cutoff = raw.find("CURVE") #find the start of the curve data in file

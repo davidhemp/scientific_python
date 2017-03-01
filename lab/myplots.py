@@ -1,19 +1,17 @@
 #!/usr/bin/python
-from time import time
-
-import numpy as np
 import matplotlib.pyplot as plt
 
 class Plotter(object):
     def __init__(self, level='DEBUG'):
         pass
 
-    def plot_psd(self, xpsd, ypsd, fig_name = 'PSD data'):
+    def plot_psd(self, xpsd, ypsd, fig_name = 'PSD data', args=''):
         plt.figure(fig_name)
-        plt.semilogy(xpsd/1000, ypsd)
+        plt.semilogy(xpsd/1000, ypsd, args)
         plt.xlim(0, 300)
+        plt.ylim(1e-14, 1e-4)
     	plt.xlabel(r'Trap Frequency (kHz)')
-    	plt.ylabel(r'Power Spectral Density $\mathregular{(V^2/\sqrt{Hz})}$')
+    	plt.ylabel(r'Power Spectral Density $\mathregular{(V^2/Hz)}$')
         return
 
     def psd_with_fit(self):
@@ -22,17 +20,17 @@ class Plotter(object):
             viscosity = 18.6e-6
             density = 2650
             kb = 1.38e-23
-            top = 0.619*9*np.pi*viscosity*d**2
-            bottom = np.sqrt(2)*density*kb*300
+            top = 0.619*9*3.14*viscosity*d**2
+            bottom = 3.14*density*kb*300*2**(0.5)
             return (self.pressure*100*top)/(r*bottom)
 
         def model_psd(x, r, w0, gamma, feedback = 0, deltaw0 = 0):
-            w0 = w0*2*np.pi
-            x = x*2*np.pi
-            deltaw0 = deltaw0*2*np.pi
-            mass = 2650*(4./3)*np.pi*r**3
+            w0 = w0*2*3.14
+            x = x*2*3.14
+            deltaw0 = deltaw0*2*3.14
+            mass = 2650*(4./3)*3.14*r**3
             damping = taylor_damping(r)
-            top = 1.38*10**-(23)*300*damping/(np.pi*mass)
+            top = 1.38*10**-(23)*300*damping/(3.14*mass)
             bottom = ((w0 + deltaw0)**2 - x**2)**2 + (x*(damping + feedback))**2
             return gamma**2*top/bottom + self.noise
 
@@ -45,7 +43,7 @@ class Plotter(object):
         plt.xlim(0, 300)
     	plt.xlabel(r'Trap Frequency (kHz)')
     	plt.ylabel(r'Power Spectral Density $\mathregular{(V^2/\sqrt{Hz})}$')
-        plt.show()
+        # plt.show()
         return
 
     def scatter_fit_errors(self, ret):
@@ -65,56 +63,48 @@ class Plotter(object):
                     fmt = 'o',
                     label = label)
 
-    def hist2d(self, x, y, res=100, sigma=1.5):
-        from scipy.ndimage.filters import gaussian_filter
-        start_time = time()
-        x_max, x_min = max(x), min(x)
-        y_max, y_min = max(y), min(y)
-        xx = linspace(x_min, x_max, res)
-        yy = linspace(y_min, y_max, res)
-        zz = zeros((res, res))
-        for xx_index in range(res-1):
-            n_list = []
-            for n,i in enumerate(x):
-                if i >= xx[xx_index] and i <= xx[xx_index + 1]:
-                    n_list.append(n)
-            n_list = list(set(n_list))
-            y_values = [y[i] for i in n_list]
-            for ii in range(len(y_values)-1):
-                for n,i in enumerate(yy):
-                    if i >= y_values[ii] and i <= y_values[ii + 1]:
-                        zz[xx_index, n] += 1
-        zz = gaussian_filter(zz, sigma)
-        self.logger.info("2d hist generated in %i seconds"
-                                % (time()-start_time))
-        return xx, yy, zz
+    def phase_space(self, x, y):
+        plt.plot(x[1000::10], y[1000::10], 'x')
+        plt.xlim(-1000, 1000)
+        plt.ylim(-1000, 1000)
+    	plt.xlabel('Position, nm')
+    	plt.ylabel('Momentum, nm')
+        plt.show()
 
-    # def filterplot():
-    #     if verbosity == 1:
-    #     fig1 = _plt.figure()
-    #     ax = fig1.add_subplot(111)
-    #     ax.plot(freqList, GainArray, '-', label="Specified Filter")
-    #     ax.set_title("Frequency Response")
-    #     if SampleFreq == 2*_np.pi:
-    #         ax.set_xlabel(("$\Omega$ - Normalized frequency "
-    #                        "($\pi$=Nyquist Frequency)"))
-    #     else:
-    #         ax.set_xlabel("frequency (Hz)")
-    #     ax.set_ylabel("Gain (dB)")
-    #     ax.set_xlim([0, SampleFreq/2.0])
-    #     fig2 = _plt.figure()
-    #     ax = fig2.add_subplot(111)
-    #     ax.plot(freqList, PhaseDiffArray, '-', label="Specified Filter")
-    #     ax.set_title("Phase Response")
-    #     if SampleFreq == 2*_np.pi:
-    #         ax.set_xlabel(("$\Omega$ - Normalized frequency "
-    #                        "($\pi$=Nyquist Frequency)"))
-    #     else:
-    #         ax.set_xlabel("frequency (Hz)")
-    #
-    #     ax.set_ylabel("Phase Difference")
-    #     ax.set_xlim([0, SampleFreq/2.0])
-    #     _plt.show()
+    def filtered_plot(self, x, filtered, filtered_psd, filter_response):
+        fig, ax = plt.subplots(1,3)
+
+        ax[0].plot(x[1000:2000], filtered[1000:2000])
+        ax[1].plot(filter_response[0], filter_response[1])
+        ax[1].set_xlim((0,300000))
+        ax[2].semilogy(filtered_psd[0], filtered_psd[1])
+        # ax[2].set_xlim((0,300))
+        plt.show()
+        # if verbosity == 1:
+        # fig1 = _plt.figure()
+        # ax = fig1.add_subplot(111)
+        # ax.plot(freqList, GainArray, '-', label="Specified Filter")
+        # ax.set_title("Frequency Response")
+        # if SampleFreq == 2*_3.14:
+        #     ax.set_xlabel(("$\Omega$ - Normalized frequency "
+        #                    "($\pi$=Nyquist Frequency)"))
+        # else:
+        #     ax.set_xlabel("frequency (Hz)")
+        # ax.set_ylabel("Gain (dB)")
+        # ax.set_xlim([0, SampleFreq/2.0])
+        # fig2 = _plt.figure()
+        # ax = fig2.add_subplot(111)
+        # ax.plot(freqList, PhaseDiffArray, '-', label="Specified Filter")
+        # ax.set_title("Phase Response")
+        # if SampleFreq == 2*_3.14:
+        #     ax.set_xlabel(("$\Omega$ - Normalized frequency "
+        #                    "($\pi$=Nyquist Frequency)"))
+        # else:
+        #     ax.set_xlabel("frequency (Hz)")
+        #
+        # ax.set_ylabel("Phase Difference")
+        # ax.set_xlim([0, SampleFreq/2.0])
+        # _plt.show()
 
 """
 # 	def histplot(filename,data=None,nobins=100,maxx=300):
@@ -129,8 +119,7 @@ class Plotter(object):
 
     # def test_self(self):
     #     import pylab as p
-    #     import numpy as np
-    #     freq_f = 100000
+    #     import numpy as 3.14  #     freq_f = 100000
     #     t = p.linspace(0, 1, 10**(6))
     #     A = p.zeros(10**(6))
     #     for i in xrange(len(t)):

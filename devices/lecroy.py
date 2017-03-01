@@ -37,7 +37,7 @@ class HDO4022(HDO6104):
 
 ## The code below was auto-generated and so is quite hard to read, but it works
 
-def InterpretWaveform(raw, integersOnly=False, headersOnly=False):
+def interpret_waveform(raw, integersOnly=False, headersOnly=False):
 	from struct import unpack
 
 	if raw[0] != '#':

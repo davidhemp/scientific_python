@@ -3,9 +3,11 @@ from time import time
 from datetime import datetime
 import logging
 
+import pymongo
+
 class Loader(object):
-	def __init__(self, level='DEBUG'):
-		self.logger = logging.getLogger("Saving")
+	def __init__(self, level = 'DEBUG', logger_name = "Saving"):
+		self.logger = logging.getLogger(logger_name)
 		try:
 			level_value = eval('logging.%s' %level.upper())
 		except AttributeError:
@@ -41,48 +43,55 @@ class Loader(object):
 					line += "%s," %data[col][row]
 				fw.write(line[:-1] + "\n")
 
+	def save_to_db(self, x, y, collection):
+		client = MongoClient()
+		db = client['data']
+		coll = db[collection]
+		result = coll.insert_one({"x":x, "y":y, "date":datetime.now()})
+
+
 	## Loading Data
 
 	def load_data(self, filename, col = 2, time_data = True):
 		"""Able to load all raw file types from LeCory or Tektronix as well as
 		 cvs files. A named tuple is returned with values: x, y, xpsd, ypsd."""
 
-		def load_ascii(filename):
+		def load_ascii(filename='20160205-114220_fft.txt.txt'):
 			"""Loads any ascii file into a numpy array. It populates the array
 			line by line as for large files, above 1 GB, the load all method
 			ran into memory errors"""
 			self.logger.debug("Loading data from %s as ascii" %filename)
 			from numpy import zeros
+			import os
+			length = os.path.getsize(filename)
+			data = zeros((col, length))
+			i = 0
 			with open(filename) as f:
-				no_lines = 0
 				for line in f:
-					no_lines += 1
-
-			data = zeros((col, no_lines))
-			with open(filename) as f:
-				for line, i in zip(f, range(no_lines)):
+					print(i, line)
 					linedata = line.strip().split(',')
 					try:
 						for j in range(min(col,len(linedata))):
 							data[j][i] = linedata[j]
-						i += 1
 					except ValueError:
 						pass
-			return data
+					else:
+						i += 1
+			return data[0][:i], data[1][:i]
 
 		def load_raw(filename):
 			self.logger.debug("Loading data from %s as raw" %filename)
 			with open(filename, 'rb') as f:
 				raw = f.read()
-				x, y = InterpretWaveform(raw)
+				x, y = interpret_waveform(raw)
 			return x, y
 
 		startime = time()
 		if filename.endswith((".trc",".raw")):
-			from LeCroy import InterpretWaveform
+			from devices.lecroy import interpret_waveform
 			data = load_raw(filename)
 		elif filename.endswith('.isf'):
-			from Tektronix import InterpretWaveform
+			from devices.tektronix import interpret_waveform
 			data = load_raw(filename)
 		else:
 			data = load_ascii(filename)
