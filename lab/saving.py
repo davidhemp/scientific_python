@@ -3,7 +3,6 @@ from time import time
 from datetime import datetime
 import logging
 
-import pymongo
 
 class Loader(object):
 	def __init__(self, level = 'DEBUG', logger_name = "Saving"):
@@ -44,6 +43,7 @@ class Loader(object):
 				fw.write(line[:-1] + "\n")
 
 	def save_to_db(self, x, y, collection):
+		from pymongo import MongoClient
 		client = MongoClient()
 		db = client['data']
 		coll = db[collection]
@@ -68,7 +68,6 @@ class Loader(object):
 			i = 0
 			with open(filename) as f:
 				for line in f:
-					print(i, line)
 					linedata = line.strip().split(',')
 					try:
 						for j in range(min(col,len(linedata))):

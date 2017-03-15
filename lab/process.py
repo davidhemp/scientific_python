@@ -3,7 +3,7 @@ from collections import namedtuple
 from time import time
 
 import numpy as np
-from scipy.signal import butter, lfilter, freqz
+from scipy.signal import butter, lfilter, freqz, filtfilt
 from scipy.optimize import basinhopping, curve_fit
 
 #saving.logger.setLevel(logging.INFO)
@@ -93,7 +93,8 @@ class Processor(object):
         start_time = time()
         b, a =  butter_b_a(lowcut, highcut, fs, order = order, btype = btype)
         response = get_filter_response(a = a, b = b, sample_freq = fs)
-        filtered = lfilter(b, a, y)
+        # filtered = lfilter(b, a, y)
+        filtered = filtfilt(b, a, y)
         self.logger.debug("Data filtered in %i seconds" % (time()-start_time))
         return filtered, response
 
