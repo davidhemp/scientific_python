@@ -129,10 +129,14 @@ class Data(object):
     #
 
     def get_phase_space(self, key='z'):
+
         gamma = self.fit_parms[key][2]
         trap_freq = self.centers[key]
         y = self.filtered[key]
-        p, m = self.processer.phase_space(self.x, y, trap_freq, self.fs, gamma)
+        p, m = self.processer.phase_space(self.filtered[key],     # y
+                                          self.fit_parms[key][0], # r
+                                          self.fs,                # fs
+                                          self.fit_parms[key][2]) # gamma
         self.phase_space[key] = [p, m]
 
     def plot_phase_space(self, key='z'):

@@ -30,13 +30,19 @@ class Processor(object):
     def rms(y):
         return np.sqrt(np.mean(np.square(y)))
 
+    @classmethod
     def mov_ave(self, data, pnts=50):
-        rtn = []
-        self.logger.debug("Preforming moving average")
-        for i in range(0, len(data)-pnts):
-            rtn.append(np.mean(data[i:i+pnts]))
-        self.logger.debug("Moving average completed in %i seconds")
-        return np.array(rtn)
+        start_time = time()
+        if (self.logger):
+            self.logger.debug("Preforming moving average")
+        cum = _np.cumsum(data, dtype=float)
+        cum[n:] = cum[n:] - cum[:-n]
+        ret = cum[n - 1:] / n
+        end_time = time() - start_time
+        if (self.logger):
+            self.logger.debug(
+                    "Moving average completed in {} seconds".format(end_time))
+        return ret
 
     def butterworth_filter(self, y, fs, lowcut=0, highcut=1,
                             btype = 'band', order=5):
@@ -99,6 +105,27 @@ class Processor(object):
         return filtered, response
 
     def psd(self, x, y, fs, nperseg = 1e6):
+        '''
+        Generates a power spectrial density of the given time data
+
+        Parameters
+        ----------
+        x : numpy array
+            Time series data
+        y : numpy array
+            Amplitude for each time point
+        fs : int
+            sample frequency
+        nperseg: int (optional)
+            number of segments, how many frequencies to return.
+
+        Returns
+        -------
+        xpsd : numpy array
+            Frequency data
+        ypsd : numpy array
+            Amplitude data in units of m^2/Hz (or V^2/Hz if not converted)
+        '''
         from scipy.signal import welch
         self.logger.debug("Generating PSD data")
         start_time = time()
@@ -108,34 +135,82 @@ class Processor(object):
         return xpsd, ypsd
 
     def cut_peak(self, center, xpsd, ypsd, bandwidth = 40000):
+        '''
+        Returns data centered on the frequency peak.
+
+        Parameters
+        ----------
+
+        center : Int
+                Center frequency of the trap signal
+        xpsd : numpy array
+            Frequency data
+        ypsd : numpy array
+            Amplitude data
+        bandwidth: Int (optional)
+            Cut off bandwidth
+
+        Returns
+        -------
+        xpsd : numpy array
+            Truncated frequency data
+        ypsd : numpy array
+            Truncated amplitude data
+        '''
         clause1 = (xpsd >= (center - bandwidth))
         clause2 = (xpsd <= (center + bandwidth))
         clause = clause1 * clause2
         cut_indexs = np.where(clause)[0]
         return xpsd[cut_indexs], ypsd[cut_indexs]
 
-    def taylor_damping(self, r):
-        d = 364e-12
-        viscosity = 18.6e-6
-        density = 2650
-        kb = 1.38e-23
-        top = 0.619*9*np.pi*viscosity*d**2
-        bottom = np.sqrt(2)*density*kb*300
-        return (self.pressure*100*top)/(r*bottom)
-
     def damping(self, r):
-        kb = 1.38e-23
-        d = 364e-12
-        L = 1e-6
-        Kn = (kb*300)/(L*np.sqrt(2)*np.pi*d**2*self.pressure*100)
+        '''
+        Damping on the particle for a given pressure
+
+        Parameters
+        ----------
+        r : float
+            Particle radius in metres.
+        self.pressure: float
+            Defined at object creation and is an interal parameter. This is to
+            prevent it becoming a fit parameter but accident.
+
+        Outputs
+        -------
+        gamma_0 : float
+                The damping from air collitions in the particle at that pressure
+        '''
+        kb = 1.38e-23 # boltzmann constant
+        d = 364e-12 # diameter of the gas particles
+        Kn = (kb*300)/(r*np.sqrt(2)*np.pi*d**2*self.pressure*100) # Knudsen number
         viscosity = 18.6e-6
         mass = 2650*(4./3)*np.pi*r**3
         left = (6*np.pi*viscosity*r)/(mass)
         center = 0.619/(0.619+Kn)
-        right = (0.31*Kn)/(0.785+1.152*Kn+Kn**2)
+        right = 1+((0.31*Kn)/(0.785+1.152*Kn+Kn**2))
         return left*center*right
 
     def model(self, x, r, w0, gamma, feedback = 0, deltaw0 = 0, *args):
+        '''
+        Model of the particles PSD peak for a given frequency. Refer to paper
+        for more details.
+
+        Parameters
+        ----------
+        x : float/int
+            Single frequency
+        r : float
+            Particle radius
+        w0 : float/int
+            Centre/natural frequnecy of the oscillator
+        gamma : float/int
+            Conversion factor to go from V/Hz to m/Hz
+
+        Outputs
+        -------
+        Amplitude : float
+            The particles Amplitude (in units of m^2/Hz)
+        '''
         if r<0 or w0<0 or gamma<0 or feedback<0:
             return x*1e9
         w0 = w0*2*np.pi
@@ -151,24 +226,54 @@ class Processor(object):
         right = right_top/right_bottom
         return gamma**2*left*right/(2*np.pi)**3 + self.noise
 
-    def imp_model(self, x, w0, damping, feedback=0, noise = 1e-12):
-        if w0<0 or feedback<1:
-            return x*1e9
-        mass = 2650*(4./3)*np.pi*self.r**3
-        constant = 1.38*10**-(23)*300/(np.pi*mass)
-        top = self.gamma*(constant*damping)
-        bottom = (w0**2-x**2)**2+(damping+feedback)**2*x**2
-        return top/bottom+noise
 
     def psd_fit(self, x, y, freq_center, pressure, noise,
                 ref_parms = [], ref_errors = [], feedback=False):
+        '''
+        This method is used to fit the "model" method to experimental data. This
+        data be done stand alone but it is recommended to use the Data object class.
 
+        To fit data with feedback on, previous fit data without feedback is needed
+        to obtain gamma and radius.
+
+        Parameters
+        ----------
+        x : numpy array
+            Frequency data to fit to.
+        y : numpy array
+            Amplitude data to fit to.
+        freq_center : float/int
+            Centre/natural frequnecy of the oscillator for that degree of freedom.
+        pressure : float/int
+            Pressure inside the chamber
+        noise: float
+            Noise floor of detection system.
+        ref_parms : array like
+            Fit Parameters from mbar fit.
+        ref_errors : array like
+            Errors from previous fits, using to propigate errors.
+        feedback : boolean
+            Is feedback on or off.
+
+        Outputs
+        -------
+        fit_parms : list
+            Fit Parameters.
+        fit_errors
+            Fit errors.
+        '''
         def model_feedback(x, feedback, deltaw0):
-            return self.model(x, self.r, self.w0, self.gamma,
-                            feedback, deltaw0)
+            return self.model(x,
+                            self.r,
+                            self.w0,
+                            self.gamma,
+                            feedback,
+                            deltaw0)
 
-        def fitting_with_feedback(x, y,
-                                    ref_parms, ref_errors):
+        def fitting_with_feedback(x, y, ref_parms, ref_errors):
+            '''
+                Use fit data from a previous fit to find feedback numbers
+            '''
             self.r, self.w0, self.gamma = ref_parms[:3]
             if len(ref_parms) == 5:
                 feedback = ref_parms[3]
@@ -218,7 +323,25 @@ class Processor(object):
             fit_parms, fit_errors = fitting(x, y, freq_center)
         return list(fit_parms), list(fit_errors)
 
-    def psd_ave(self, data, chucks=100, filename=""):
+    def psd_ave(self, data, chucks=100):
+        '''
+        Takes time data, chucks it, takes a PSD of each chuck, and then averages
+        to chucks together.
+
+        Parameters
+        ----------
+        data : 2d array
+            [0] is time data and [1] is amplitude data.
+        chucks: int (optional)
+            The number of chucks to break the data down into.
+
+        Returns
+        -------
+        xpsd : numpy array
+            Averaged frequency data
+        ypsd : numpy array
+            Averaged amplitude data
+        '''
         n = len(data[0])/chucks
         data_sets = [data[1][i:i+n] for i in range(0, len(data[1]), n)][:-1]
         time_sets = [data[0][i:i+n] for i in range(0, len(data[0]), n)][:-1]
@@ -229,87 +352,29 @@ class Processor(object):
         ypsd /= len(data_sets)
         return xpsd, ypsd
 
-    def phase_space(self, x, y, trap_freq, fs, gamma=1e5):
+    def phase_space(self, y, r, fs, gamma=1e5):
+        '''
+        Produces phase-space data with the amplitude data.
+
+        Parameters
+        ----------
+        y : array like
+            Time amplitude data in units of Volts
+        r : float
+            Particle radius, for mass
+        fs : float/int
+            Sample frequency to abtain particle velocity
+        gamma : int
+            Conversion contant to change Volts into metres
+        '''
         start_time = time()
         momentum = []
-        scale = 10**9
+        # scale = 10**9
+        scale = 1
         position = scale*(y)/gamma
+        mass = 2500*(4/3)*np.pi*(r*scale)**3
         for i in range(len(position)-1):
-            momentum.append(fs*(position[i+1]-position[i])/(trap_freq*2*np.pi))
+            momentum.append(fs*(position[i+1]-position[i])*mass)
         self.logger.debug("Phase space data generated in %i seconds"
                                 % (time()-start_time))
         return np.array(position[:-1]), np.array(momentum)
-
-
-class EFieldDisplacement(object):
-    def __init__(self, power = 0.5):
-        POWER = power
-        WAVELENGTH = 1550*10**(-9)
-        NA = 0.9
-        W_0 = WAVELENGTH / (2*NA)
-        self.Z_RAY = (np.pi * W_0**2)/WAVELENGTH
-        self.MAX_I0 = (2*0.4)/(np.pi*(W_0**2))
-        N_INDEX = 1.54
-        RADIUS = 100*10**(-9)
-        DISTANCE = 3*10**(-2)
-        c = 3.*10**(8)
-        ratio = (N_INDEX - 1)/(N_INDEX + 2)
-        self.ALPHA = ratio*(4.*np.pi*RADIUS**3)/(c)
-
-    def run_process(self, filelist, label="", x = [], plot=True):
-        ret = namedtuple('processed', ['m',
-                                        'm_std',
-                                        'x',
-                                        'x_std'
-                                        'y',
-                                        'y_std',
-                                        'fit_data',
-                                        'fit_data_std'])
-        y_rms = []
-        y_rms_std = []
-        for pointlist in filelist:
-            _data = []
-            for filename in pointlist:
-                data = saving.load_data(filename)
-                if len(data.x) > 0 :
-                    _data.append(data.y)
-            _rms = np.sqrt(np.mean(np.square(_data)))
-            y_rms.append(np.mean(_rms))
-            y_rms_std.append(np.std(_rms))
-
-        y_rms_normalised = abs(np.array(y_rms)/y_rms[0] - 1)
-        ret.y = 100*y_rms_normalised/0.05 #100mn/0.05V check this
-        ret.y_std = 100*np.array(y_rms_std)/0.05
-
-        if len(x) == 0:
-            ret.x = np.arange(len(ret.y))
-        else:
-            ret.x = x
-            ret.y = ret.y[:len(x)]
-            ret.y_std = ret.y_std[:len(x)]
-
-        ret.x_std = 0
-        ret.m, ret.m_std = self.fit(ret.x, ret.y)
-        fit_data = [self.position_master(i*1000, ret.m)*10**(9) for i in x]
-        ret.fit_data = np.array(fit_data)
-        ret.fit_data_std = ret.fit_data * ret.m_std/ret.m
-        return ret
-
-    def position_master(self, x, charge):
-        q = charge*1.6*10**(-19)
-        # I have no idea why the 8.0 is needed
-        ret = 8.0*(8*q*self.Z_RAY**2)/(self.ALPHA*self.MAX_I0)
-        return x*ret
-
-    def fit(self, x, y_rms):
-        charges = np.arange(0, 10, 0.1)
-        y_rms = y_rms*10**(-9) #Remember y is kept in nm
-        voltages = x * 1000
-        ret = []
-        for position, voltage in zip(y_rms, x):
-            _ = []
-            for charge in charges:
-                diff = abs(position - self.position_master(voltage*1000, charge))
-                _.append(diff)
-            ret.append(charges[_.index(min(_))])
-        return np.mean(ret), np.std(ret)

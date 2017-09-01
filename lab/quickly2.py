@@ -15,7 +15,7 @@ def loadNave(first_file, count=10, fs=None):
     path, start = re.search(rgx, first_file).groups()
     xpsd, ypsd = loadNpsd(first_file)
     count -= 1
-    n = 1
+    n = 0
     ypsd_list = [ypsd]
     while count > 0: # Fast fail.
         filename = "{}_{:05d}.trc".format(path, (int(start) + count))
